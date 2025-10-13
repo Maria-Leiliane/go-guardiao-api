@@ -38,8 +38,6 @@ func main() {
 	apiRouter.HandleFunc("/user/support-contact", users.HandleAddSupportContact).Methods("POST")
 	apiRouter.HandleFunc("/user/support-contact", users.HandleGetSupportContacts).Methods("GET")
 	apiRouter.HandleFunc("/user/support-contact/{contactId}", users.HandleDeleteSupportContact).Methods("DELETE")
-
-	// --- ROTAS DO SERVIÇO DE HÁBITOS & METAS (NOVO) ---
 	apiRouter.HandleFunc("/habits", habits.HandleCreateHabit).Methods("POST")
 	apiRouter.HandleFunc("/habits", habits.HandleGetHabits).Methods("GET")
 	apiRouter.HandleFunc("/habits/log", habits.HandleLogHabit).Methods("POST")
