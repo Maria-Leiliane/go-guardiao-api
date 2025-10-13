@@ -82,6 +82,9 @@ type LeaderboardEntry struct {
 
 // SupportContact representa um membro da rede de apoio do usuário.
 type SupportContact struct {
-	UserID string `json:"user_id"`
-	// Outros campos relevantes (ex: ContactID, Nickname, NotificationPreference)
+	UserID                 string `json:"user_id"`
+	ContactID              string `json:"contact_id"`    // Novo campo ID para remoção
+	ContactEmail           string `json:"contact_email"` // Novo campo
+	Nickname               string `json:"nickname"`      // Novo campo
+	NotificationPreference string `json:"notification_preference"`
 }

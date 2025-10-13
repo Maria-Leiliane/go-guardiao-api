@@ -1,6 +1,7 @@
-package api
+package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -8,97 +9,57 @@ import (
 
 	"github.com/gorilla/mux"
 
-	// Mockup de pacotes internos (seriam implementados em internal/app/...)
-	"guardian/internal/app/auth"
+	// Importa os pacotes internos de Autenticação e Usuários
+	"go-guardiao-api/internal/auth"
+	"go-guardiao-api/internal/users" // <- Importa o seu novo serviço
 )
 
-// Constantes de Configuração
-const (
-	port = ":8080"
-)
+// defineAuthRoutes configura as rotas públicas (sem JWT).
+func defineAuthRoutes(router *mux.Router) {
+	router.HandleFunc("/register", auth.HandleRegister).Methods("POST")
+	router.HandleFunc("/login", auth.HandleLogin).Methods("POST")
+}
 
+// main é a função principal que inicializa o servidor HTTP.
 func main() {
-	// 1. Inicializa o Roteador
-	router := mux.NewRouter()
+	r := mux.NewRouter()
 
-	// 2. Configura as Rotas
-	setupRoutes(router)
+	// 1. Rotas de Autenticação (Públicas)
+	authRouter := r.PathPrefix("/api/v1/auth").Subrouter()
+	defineAuthRoutes(authRouter)
 
-	// 3. Inicializa o Servidor HTTP
-	fmt.Printf("Servidor Guardião da Saúde rodando na porta %s\n", port)
+	// 2. Rotas Protegidas (Requerem JWT)
+	apiRouter := r.PathPrefix("/api/v1").Subrouter()
+	apiRouter.Use(auth.JWTAuthMiddleware)
 
-	// Configurações ideais para produção (timeouts)
+	// Rotas do Serviço de Usuários (agora roteadas a partir do pacote 'users')
+	apiRouter.HandleFunc("/user/profile", users.HandleGetUserProfile).Methods("GET")
+	apiRouter.HandleFunc("/user/profile", users.HandleUpdateProfile).Methods("PUT")
+	apiRouter.HandleFunc("/user/support-contact", users.HandleAddSupportContact).Methods("POST")
+	apiRouter.HandleFunc("/user/support-contact", users.HandleGetSupportContacts).Methods("GET")
+	apiRouter.HandleFunc("/user/support-contact/{contactId}", users.HandleDeleteSupportContact).Methods("DELETE")
+
+	// Rota de exemplo para testar a proteção (será substituída por outros serviços)
+	apiRouter.HandleFunc("/protected", func(w http.ResponseWriter, r *http.Request) {
+		_, err := w.Write([]byte("Olá, mundo protegido!"))
+		if err != nil {
+			return
+		}
+	}).Methods("GET")
+
+	// Inicia o servidor
+	port := "8080"
+	log.Printf("Servidor Guardião da Saúde iniciado em http://localhost:%s", port)
+
 	srv := &http.Server{
-		Handler:      router,
-		Addr:         port,
+		Handler:      r,
+		Addr:         fmt.Sprintf(":%s", port),
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Inicia o servidor (log.Fatal irá encerrar a aplicação em caso de erro)
-	log.Fatal(srv.ListenAndServe())
-}
-
-// setupRoutes define todas as rotas da nossa API, separando rotas públicas e protegidas.
-func setupRoutes(r *mux.Router) {
-	// --- Rotas Públicas (Não requerem JWT) ---
-	public := r.PathPrefix("/api/v1/public").Subrouter()
-
-	// Rotas do Serviço de Autenticação
-	public.HandleFunc("/register", auth.HandleRegister).Methods("POST")
-	public.HandleFunc("/login", auth.HandleLogin).Methods("POST")
-
-	// Rotas do Conteúdo Educacional (pode ser público)
-	public.HandleFunc("/content", HandleGetContent).Methods("GET")
-
-	// --- Rotas Protegidas (Requerem JWT - Middleware de Autenticação) ---
-	protected := r.PathPrefix("/api/v1/protected").Subrouter()
-
-	// Aplica o middleware de autenticação JWT em todas as rotas protegidas
-	protected.Use(auth.JWTAuthMiddleware)
-
-	// Rotas do Serviço de Usuários e Perfil
-	protected.HandleFunc("/users/{id}", HandleGetUserProfile).Methods("GET")
-
-	// Rotas do Serviço de Hábitos & Metas
-	protected.HandleFunc("/habits", HandleCreateHabit).Methods("POST")
-
-	// Rotas do Serviço de Gamificação (Mana)
-	protected.HandleFunc("/mana/balance", HandleGetManaBalance).Methods("GET")
-	protected.HandleFunc("/challenges/complete", HandleCompleteChallenge).Methods("POST")
-
-	// Rotas do Serviço de Suporte & Acolhimento
-	protected.HandleFunc("/support/contacts", HandleAddSupportContact).Methods("POST")
-}
-
-// Mock Handlers (Substituir por lógica real dos serviços)
-func HandleGetContent(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"message": "Conteúdo Educacional - Público"}`))
-}
-
-func HandleGetUserProfile(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"message": "Perfil do Usuário - Protegido"}`))
-}
-
-func HandleCreateHabit(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte(`{"message": "Hábito criado com sucesso - Protegido"}`))
-}
-
-func HandleGetManaBalance(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"mana_balance": 1500}`))
-}
-
-func HandleCompleteChallenge(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"message": "Desafio concluído, Mana calculada e enviada para SQS - Protegido"}`))
-}
-
-func HandleAddSupportContact(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte(`{"message": "Contato de suporte adicionado - Protegido"}`))
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatalf("Não foi possível iniciar o servidor: %v", err)
+	}
 }
