@@ -4,20 +4,29 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 
 	"go-guardiao-api/internal/auth"
+	"go-guardiao-api/internal/platforms/db"
 	"go-guardiao-api/pkg/models"
 
 	"github.com/gorilla/mux"
 )
 
-// HandleCreateHabit cria um novo hábito/meta para o usuário.
-func HandleCreateHabit(w http.ResponseWriter, r *http.Request) {
-	// 1. Obter UserID do contexto
+// Service representa o serviço de Hábitos, contendo a dependência do DB.
+type Service struct {
+	DBClient *db.Client
+}
+
+// NewService cria uma nova instância do serviço de Hábitos.
+func NewService(dbClient *db.Client) *Service {
+	return &Service{DBClient: dbClient}
+}
+
+// HandleCreateHabit lida com a criação de um novo hábito.
+func (s *Service) HandleCreateHabit(w http.ResponseWriter, r *http.Request) {
 	userID, err := auth.GetUserIDFromContext(r)
 	if err != nil {
-		http.Error(w, "Acesso negado.", http.StatusUnauthorized)
+		http.Error(w, "Acesso negado: UserID ausente.", http.StatusUnauthorized)
 		return
 	}
 
@@ -27,54 +36,35 @@ func HandleCreateHabit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Lógica real: Salvar o newHabit no RDS.
+	newHabit.UserID = userID
+	habitID, err := s.DBClient.CreateHabit(r.Context(), newHabit)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Falha ao criar hábito: %v", err), http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(map[string]string{
-		"message":  fmt.Sprintf("Hábito '%s' criado com sucesso.", newHabit.Name),
-		"habit_id": "mock-habit-123", // ID retornado após salvar no DB
-		"user_id":  userID,
+		"message":  "Hábito criado com sucesso.",
+		"habit_id": habitID,
 	}); err != nil {
 		http.Error(w, "Erro ao serializar resposta.", http.StatusInternalServerError)
 	}
 }
 
-// HandleLogHabit registra o progresso diário de um hábito.
-// Esta ação é crítica, pois irá alimentar o Serviço de Gamificação.
-func HandleLogHabit(w http.ResponseWriter, r *http.Request) {
-	userID, _ := auth.GetUserIDFromContext(r)
-	var logData models.HabitLog
-
-	if err := json.NewDecoder(r.Body).Decode(&logData); err != nil {
-		http.Error(w, "Requisição inválida.", http.StatusBadRequest)
+// HandleGetHabits busca todos os hábitos de um usuário.
+func (s *Service) HandleGetHabits(w http.ResponseWriter, r *http.Request) {
+	userID, err := auth.GetUserIDFromContext(r)
+	if err != nil {
+		http.Error(w, "Acesso negado: UserID ausente.", http.StatusUnauthorized)
 		return
 	}
 
-	// Lógica real: Salvar o logData no DynamoDB (para alto volume).
-	// Em um sistema real, essa ação acionaria uma mensagem SQS
-	// para o Worker de Gamificação calcular a Mana.
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(map[string]string{
-		"message": fmt.Sprintf("Progresso registrado para o hábito %s. Mana em processamento.", logData.HabitID),
-		"user_id": userID,
-	}); err != nil {
-		http.Error(w, "Erro ao serializar resposta.", http.StatusInternalServerError)
-	}
-}
-
-// HandleGetHabits busca todos os hábitos e metas do usuário.
-func HandleGetHabits(w http.ResponseWriter, r *http.Request) {
-	userID, _ := auth.GetUserIDFromContext(r)
-
-	// Lógica real: Consultar lista de hábitos no RDS.
-
-	// Mock: Retorna uma lista de hábitos.
-	habits := []models.Habit{
-		{ID: "h1", UserID: userID, Name: "Beber Água (2L)", GoalType: "Hydration", Frequency: "Daily"},
-		{ID: "h2", UserID: userID, Name: "Tomar Medicação", GoalType: "Medication", Frequency: "Daily"},
+	habits, err := s.DBClient.GetHabitsByUserID(r.Context(), userID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Falha ao buscar hábitos: %v", err), http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -83,16 +73,59 @@ func HandleGetHabits(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleGetHabitLogs busca o histórico de logs para um hábito específico.
-func HandleGetHabitLogs(w http.ResponseWriter, r *http.Request) {
-	// Obtém o HabitID da URL.
+// HandleLogHabit lida com o registro de um progresso em um hábito.
+func (s *Service) HandleLogHabit(w http.ResponseWriter, r *http.Request) {
+	userID, err := auth.GetUserIDFromContext(r)
+	if err != nil {
+		http.Error(w, "Acesso negado: UserID ausente.", http.StatusUnauthorized)
+		return
+	}
+
 	vars := mux.Vars(r)
 	habitID := vars["habitId"]
 
-	// Mock: Retorna logs de exemplo
-	logs := []models.HabitLog{
-		{HabitID: habitID, Value: 1, Timestamp: time.Now().Add(-24 * time.Hour)},
-		{HabitID: habitID, Value: 1, Timestamp: time.Now()},
+	var logData models.HabitLog
+	if err := json.NewDecoder(r.Body).Decode(&logData); err != nil {
+		http.Error(w, "Requisição inválida.", http.StatusBadRequest)
+		return
+	}
+
+	logData.UserID = userID
+	logData.HabitID = habitID
+
+	if err := s.DBClient.LogHabit(r.Context(), logData); err != nil {
+		http.Error(w, fmt.Sprintf("Falha ao registrar log de hábito: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(map[string]string{
+		"message": "Log de hábito registrado com sucesso.",
+	}); err != nil {
+		http.Error(w, "Erro ao serializar resposta.", http.StatusInternalServerError)
+	}
+}
+
+// HandleGetHabitLogs busca os logs de um hábito específico.
+func (s *Service) HandleGetHabitLogs(w http.ResponseWriter, r *http.Request) {
+	// A variável userID não é usada aqui, mas é extraída para garantir a
+	// consistência de que a rota é protegida e o usuário está autenticado.
+	// O erro está sendo tratado, então o warning 'unused variable' é irrelevante,
+	// mas pode ser ignorado no Go com o '_' se fosse necessário.
+	_, err := auth.GetUserIDFromContext(r)
+	if err != nil {
+		http.Error(w, "Acesso negado: UserID ausente.", http.StatusUnauthorized)
+		return
+	}
+
+	vars := mux.Vars(r)
+	habitID := vars["habitId"]
+
+	logs, err := s.DBClient.GetHabitLogs(r.Context(), habitID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Falha ao buscar logs do hábito: %v", err), http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")

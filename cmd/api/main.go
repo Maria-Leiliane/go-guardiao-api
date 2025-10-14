@@ -10,7 +10,9 @@ import (
 	"github.com/gorilla/mux"
 
 	"go-guardiao-api/internal/auth"
+	"go-guardiao-api/internal/gamification"
 	"go-guardiao-api/internal/habits"
+	"go-guardiao-api/internal/platforms/db"
 	"go-guardiao-api/internal/users"
 )
 
@@ -20,34 +22,64 @@ func defineAuthRoutes(router *mux.Router) {
 	router.HandleFunc("/login", auth.HandleLogin).Methods("POST")
 }
 
-// main função principal que inicializa o servidor HTTP.
+// defineServiceRoutes configura todas as rotas protegidas e injeta a dependência do DB.
+func defineServiceRoutes(router *mux.Router, dbClient *db.Client) {
+	// 1. Inicializa os Serviços de Negócio (Injeção de Dependência)
+	userService := users.NewService(dbClient)
+	habitService := habits.NewService(dbClient)
+	gamificationService := gamification.NewService(dbClient) // <--- INSTÂNCIA DO SERVIÇO DE GAMIFICAÇÃO
+
+	// --- ROTAS DO SERVIÇO DE USUÁRIOS ---
+	router.HandleFunc("/user/profile", userService.HandleGetUserProfile).Methods("GET")
+	router.HandleFunc("/user/profile", userService.HandleUpdateProfile).Methods("PUT")
+	router.HandleFunc("/user/support-contact", userService.HandleAddSupportContact).Methods("POST")
+	router.HandleFunc("/user/support-contact", userService.HandleGetSupportContacts).Methods("GET")
+	router.HandleFunc("/user/support-contact/{contactId}", userService.HandleDeleteSupportContact).Methods("DELETE")
+
+	// --- ROTAS DO SERVIÇO DE HÁBITOS & METAS ---
+	router.HandleFunc("/habits", habitService.HandleCreateHabit).Methods("POST")
+	router.HandleFunc("/habits", habitService.HandleGetHabits).Methods("GET")
+	router.HandleFunc("/habits/log", habitService.HandleLogHabit).Methods("POST")
+	router.HandleFunc("/habits/{habitId}/logs", habitService.HandleGetHabitLogs).Methods("GET")
+
+	// --- ROTAS DO SERVIÇO DE GAMIFICAÇÃO (CHAMANDO MÉTODOS DA STRUCT) ---
+	router.HandleFunc("/mana/balance", gamificationService.HandleGetManaBalance).Methods("GET")
+	router.HandleFunc("/mana/redeem", gamificationService.HandleRedeemReward).Methods("POST")
+	router.HandleFunc("/challenges", gamificationService.HandleListChallenges).Methods("GET")
+	router.HandleFunc("/leaderboard", gamificationService.HandleGetLeaderboard).Methods("GET")
+
+	// Rota de exemplo para testar a proteção
+	router.HandleFunc("/protected", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte("Olá, mundo protegido!"))
+		if err != nil {
+			log.Printf("Erro ao escrever a resposta na rota protegida: %v", err)
+			return
+		}
+	}).Methods("GET")
+}
+
+// main é a função principal que inicializa o servidor HTTP.
 func main() {
+	// SIMULAÇÃO DE CRIAÇÃO DO CLIENTE DB PARA USO LOCAL
+	dbClient, _ := db.NewDBClient("MOCK_DSN")
+	defer func() {
+		if dbClient != nil {
+			dbClient.Close()
+		}
+	}()
+
 	r := mux.NewRouter()
 
 	// 1. Rotas de Autenticação (Públicas)
 	authRouter := r.PathPrefix("/api/v1/auth").Subrouter()
 	defineAuthRoutes(authRouter)
 
-	// 2. Rotas Protegidas (Requerem JWT)
+	// 2. Rotas Protegidas (Injeção de Dependência)
 	apiRouter := r.PathPrefix("/api/v1").Subrouter()
-	apiRouter.Use(auth.JWTAuthMiddleware) // Aplica a proteção JWT a todas as rotas abaixo
+	apiRouter.Use(auth.JWTAuthMiddleware)
 
-	// --- ROTAS DO SERVIÇO DE USUÁRIOS ---
-	apiRouter.HandleFunc("/user/profile", users.HandleGetUserProfile).Methods("GET")
-	apiRouter.HandleFunc("/user/profile", users.HandleUpdateProfile).Methods("PUT")
-	apiRouter.HandleFunc("/user/support-contact", users.HandleAddSupportContact).Methods("POST")
-	apiRouter.HandleFunc("/user/support-contact", users.HandleGetSupportContacts).Methods("GET")
-	apiRouter.HandleFunc("/user/support-contact/{contactId}", users.HandleDeleteSupportContact).Methods("DELETE")
-	apiRouter.HandleFunc("/habits", habits.HandleCreateHabit).Methods("POST")
-	apiRouter.HandleFunc("/habits", habits.HandleGetHabits).Methods("GET")
-	apiRouter.HandleFunc("/habits/log", habits.HandleLogHabit).Methods("POST")
-	apiRouter.HandleFunc("/habits/{habitId}/logs", habits.HandleGetHabitLogs).Methods("GET")
-
-	// Rota de exemplo para testar a proteção
-	apiRouter.HandleFunc("/protected", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Olá, mundo protegido!"))
-	}).Methods("GET")
+	defineServiceRoutes(apiRouter, dbClient)
 
 	// Inicia o servidor
 	port := "8080"
