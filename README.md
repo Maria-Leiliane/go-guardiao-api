@@ -35,11 +35,7 @@ flowchart LR
     Worker <--> |Redis| Cache
 
     API -- Mensagens/Jobs --> Worker
-
-    classDef infra fill:#E7F6F2,stroke:#333,stroke-width:2px;
-    DB,Cache class infra;
 ```
-
 ---
 
 ## 🚀 Como Rodar o Projeto Localmente
