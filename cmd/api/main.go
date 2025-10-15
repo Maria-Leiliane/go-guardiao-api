@@ -77,7 +77,8 @@ func defineServiceRoutes(router *mux.Router, dbClient *db.Client, cacheClient *c
 	// --- ROTAS DO SERVIÇO DE HÁBITOS & METAS ---
 	router.HandleFunc("/habits", habitService.HandleCreateHabit).Methods("POST")
 	router.HandleFunc("/habits", habitService.HandleGetHabits).Methods("GET")
-	router.HandleFunc("/habits/log", habitService.HandleLogHabit).Methods("POST")
+	// FIX: rota agora fornece {habitId} como o handler espera
+	router.HandleFunc("/habits/{habitId}/log", habitService.HandleLogHabit).Methods("POST")
 	router.HandleFunc("/habits/{habitId}/logs", habitService.HandleGetHabitLogs).Methods("GET")
 
 	// --- ROTAS DO SERVIÇO DE GAMIFICAÇÃO ---
