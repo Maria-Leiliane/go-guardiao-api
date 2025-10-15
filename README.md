@@ -21,7 +21,7 @@ A aplicação adota uma arquitetura orientada a serviços para garantir **alta d
 
 ```mermaid
 flowchart LR
-    subgraph Backend Go
+    subgraph Backend_Go
         API["API (Gorilla Mux)"]
         Worker["Worker Assíncrono"]
     end
@@ -36,6 +36,7 @@ flowchart LR
 
     API -- Mensagens/Jobs --> Worker
 ```
+
 ---
 
 ## 🚀 Como Rodar o Projeto Localmente
@@ -67,12 +68,13 @@ chmod +x run.sh
 ### 💻 Principais Comandos do Makefile
 
 ```bash
-make up         # Sobe todos os serviços em background
-make logs       # Logs em tempo real
-make down       # Para containers
-make build      # Build das imagens Docker
-make test       # Executa os testes Go
-make prod       # Sobe usando .env.production
+make up-dev      # Sobe todos os serviços em background (desenvolvimento)
+make up-prd      # Sobe todos os serviços em background (produção)
+make logs        # Logs em tempo real
+make down        # Para containers
+make build       # Build das imagens Docker
+make test        # Executa os testes Go
+make clean       # Remove containers e volumes
 ```
 
 ---
@@ -102,13 +104,16 @@ make prod       # Sobe usando .env.production
 ## 🛠️ Contribuições
 
 Pull requests são bem-vindos! Siga as convenções de commit e abra issues para bugs e sugestões.  
-Antes de contribuir, leia o [CONTRIBUTING.md](./CONTRIBUTING.md) 
+Antes de contribuir, leia o [CONTRIBUTING.md](./CONTRIBUTING.md)
 
 ---
 
 ## 📦 Deploy em Produção
 
-- Use `make prod` ou `docker compose --env-file .env.production up -d`
+- Use `make up-prd` ou:
+  ```sh
+  docker compose -f docker-compose.yml -f docker-compose.prd.yml up --build -d
+  ```
 - Configure variáveis reais e seguras em `.env.production`
 - Para auto scaling e alta disponibilidade, utilize Docker Swarm ou Kubernetes.
 

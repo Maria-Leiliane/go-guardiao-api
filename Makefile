@@ -1,4 +1,6 @@
-# Variáveis de ambiente
+# Makefile para Guardião da Saúde - Ambiente Dev e Prod
+
+# Variável de ambiente padrão para dev (pode ser sobrescrita)
 ENV_FILE ?= .env.development
 
 # Build da imagem Docker
@@ -6,10 +8,15 @@ ENV_FILE ?= .env.development
 build:
 	docker build -t go-guardiao-api .
 
-# Sobe todos os serviços em modo detach
-.PHONY: up
-up:
-	docker compose --env-file $(ENV_FILE) up --build -d
+# Sobe todos os serviços em modo detach para desenvolvimento
+.PHONY: up-dev
+up-dev:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d
+
+# Sobe todos os serviços em modo detach para produção
+.PHONY: up-prd
+up-prd:
+	docker compose -f docker-compose.yml -f docker-compose.prd.yml up --build -d
 
 # Para todos os serviços
 .PHONY: down
@@ -26,7 +33,7 @@ logs:
 ps:
 	docker compose ps
 
-# Executa testes unitários do Go (dentro do host)
+# Executa testes unitários do Go (no host)
 .PHONY: test
 test:
 	go test ./...
@@ -36,36 +43,27 @@ test:
 clean:
 	docker compose down -v
 
-# Acesso ao shell do container API
+# Acesso ao shell do container API (ajuste para o nome real do container)
 .PHONY: shell-api
 shell-api:
-	docker exec -it guardian_api /bin/sh
+	docker exec -it $$(docker compose ps -q api) /bin/sh
 
-# Acesso ao shell do container DB
+# Acesso ao shell do container DB (ajuste para o nome real do container)
 .PHONY: shell-db
 shell-db:
-	docker exec -it guardian_db sh
-
-# Build e sobe tudo (atalho)
-.PHONY: run
-run: build up
-
-# Troca para ambiente de produção
-.PHONY: prod
-prod:
-	$(MAKE) up ENV_FILE=.env.production
+	docker exec -it $$(docker compose ps -q db) sh
 
 # Ajuda
 .PHONY: help
 help:
 	@echo "Comandos principais:"
-	@echo "  make build     # Builda a imagem Docker"
-	@echo "  make up        # Sobe containers (default=dev)"
-	@echo "  make down      # Para containers"
-	@echo "  make logs      # Logs dos containers"
-	@echo "  make ps        # Status dos containers"
-	@echo "  make test      # Roda os testes Go"
-	@echo "  make clean     # Remove containers e volumes"
-	@echo "  make shell-api # Acessa o shell da API"
-	@echo "  make shell-db  # Acessa o shell do DB"
-	@echo "  make prod      # Sobe usando .env.production"
+	@echo "  make build       # Builda a imagem Docker"
+	@echo "  make up-dev      # Sobe containers para desenvolvimento"
+	@echo "  make up-prd      # Sobe containers para produção"
+	@echo "  make down        # Para containers"
+	@echo "  make logs        # Logs dos containers"
+	@echo "  make ps          # Status dos containers"
+	@echo "  make test        # Roda os testes Go"
+	@echo "  make clean       # Remove containers e volumes"
+	@echo "  make shell-api   # Acessa o shell da API"
+	@echo "  make shell-db    # Acessa o shell do DB"

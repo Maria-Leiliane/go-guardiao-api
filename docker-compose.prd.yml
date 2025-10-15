@@ -1,0 +1,22 @@
+services:
+  api:
+    env_file: .env.production
+    # Não expõe porta diretamente (use proxy reverso)
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: "512M"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.guardian.rule=Host(`api.seuprojeto.com`)"
+
+  worker:
+    env_file: .env.production
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: "256M"

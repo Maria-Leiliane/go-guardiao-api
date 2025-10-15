@@ -1,0 +1,17 @@
+services:
+  api:
+    env_file: .env.development
+    ports:
+      - "8080:8080"
+    environment:
+      GO_ENV: development
+    # 1 réplica no dev para evitar conflito de porta
+    # deploy:
+    #   replicas: 1
+
+  worker:
+    env_file: .env.development
+    environment:
+      GO_ENV: development
+    # deploy:
+    #   replicas: 1
