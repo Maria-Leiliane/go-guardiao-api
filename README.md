@@ -102,7 +102,7 @@ make prod       # Sobe usando .env.production
 ## 🛠️ Contribuições
 
 Pull requests são bem-vindos! Siga as convenções de commit e abra issues para bugs e sugestões.  
-Antes de contribuir, leia o [CONTRIBUTING.md](./CONTRIBUTING.md) se disponível.
+Antes de contribuir, leia o [CONTRIBUTING.md](./CONTRIBUTING.md) 
 
 ---
 
