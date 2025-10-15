@@ -18,7 +18,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
     networks:
       - backend
 
@@ -29,9 +30,14 @@ services:
     image: redis:7-alpine
     container_name: guardian_redis
     restart: always
+    command: redis-server --appendonly yes
     ports:
       - "6379:6379" # Exposto apenas para depuração local
-    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     volumes:
       - redis_data:/data
     networks:
@@ -47,20 +53,24 @@ services:
     container_name: guardian_api
     restart: on-failure
     ports:
-      - "8080:8080" # Porta da API
+      - "8080:8080"
     environment:
-      # Variáveis de Conexão para o Go: Usamos o nome do serviço 'db' e 'cache' na rede interna
       DATABASE_URL: postgres://${DB_USER:-user}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-guardiaodb}?sslmode=disable
       REDIS_ADDR: cache:6379
       REDIS_PASSWORD: ""
-    # Garante que o DB esteja pronto antes da API tentar se conectar
+      GO_ENV: production
     depends_on:
       db:
         condition: service_healthy
       cache:
-        condition: service_started
+        condition: service_healthy
     networks:
       - backend
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   # ------------------------------------
   # 4. Serviço de Worker (Go - Processamento Assíncrono)
@@ -71,7 +81,6 @@ services:
       dockerfile: Dockerfile
     container_name: guardian_worker
     restart: on-failure
-    # Define o ponto de entrada para o binário do worker
     entrypoint: ["/app/worker"]
     environment:
       DATABASE_URL: postgres://${DB_USER:-user}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-guardiaodb}?sslmode=disable
@@ -82,7 +91,7 @@ services:
       - backend
 
 # ------------------------------------
-# Configurações de Volumes e Redes
+# Configurações de Volumes e Rede
 # ------------------------------------
 volumes:
   postgres_data:
