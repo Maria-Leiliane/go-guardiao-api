@@ -70,12 +70,36 @@ func (c *Client) SetManaBalance(ctx context.Context, userID string, balance int)
 	return c.rdb.Set(ctx, key, balance, 1*time.Hour).Err()
 }
 
+// UpdateLeaderboard Atualiza ou adiciona um único usuário ao leaderboard (usado em updates individuais)
 func (c *Client) UpdateLeaderboard(ctx context.Context, userID string, mana int) error {
 	if c == nil || c.rdb == nil {
-		return errors.New("redis client não está conectado")
+		return fmt.Errorf("redis client não está conectado")
 	}
 	key := "global_leaderboard"
-	return c.rdb.ZAdd(ctx, key, redis.Z{Score: float64(mana), Member: userID}).Err()
+	return c.rdb.ZAdd(ctx, key, redis.Z{
+		Score:  float64(mana),
+		Member: userID,
+	}).Err()
+}
+
+// UpdateLeaderboardBatch Atualiza vários usuários no leaderboard de uma só vez e define um TTL curto.
+func (c *Client) UpdateLeaderboardBatch(ctx context.Context, entries []models.LeaderboardEntry, ttlSeconds int) error {
+	if c == nil || c.rdb == nil {
+		return fmt.Errorf("redis client não está conectado")
+	}
+	key := "global_leaderboard"
+	zs := make([]redis.Z, len(entries))
+	for i, entry := range entries {
+		zs[i] = redis.Z{
+			Score:  float64(entry.Mana),
+			Member: entry.UserID,
+		}
+	}
+	pipe := c.rdb.Pipeline()
+	pipe.ZAdd(ctx, key, zs...)
+	pipe.Expire(ctx, key, time.Duration(ttlSeconds)*time.Second)
+	_, err := pipe.Exec(ctx)
+	return err
 }
 
 func (c *Client) GetLeaderboard(ctx context.Context, limit int64) ([]models.LeaderboardEntry, error) {

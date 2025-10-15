@@ -1,17 +1,16 @@
 version: '3.8'
 
 services:
-  # ------------------------------------
-  # 1. Serviço de Banco de Dados (PostgreSQL)
-  # ------------------------------------
   db:
     image: postgres:15-alpine
     container_name: guardian_db
-    restart: always
+    restart: unless-stopped
+    env_file:
+      - .env.development # ou .env.production
     environment:
-      POSTGRES_USER: ${DB_USER:-user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
-      POSTGRES_DB: ${DB_NAME:-guardiaodb}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -23,16 +22,13 @@ services:
     networks:
       - backend
 
-  # ------------------------------------
-  # 2. Serviço de Cache (Redis / ElastiCache Mock)
-  # ------------------------------------
   cache:
     image: redis:7-alpine
     container_name: guardian_redis
-    restart: always
+    restart: unless-stopped
     command: redis-server --appendonly yes
     ports:
-      - "6379:6379" # Exposto apenas para depuração local
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -43,56 +39,52 @@ services:
     networks:
       - backend
 
-  # ------------------------------------
-  # 3. Serviço de Backend API (Go)
-  # ------------------------------------
   api:
     build:
       context: .
       dockerfile: Dockerfile
+    env_file:
+      - .env.development # ou .env.production
     container_name: guardian_api
-    restart: on-failure
+    restart: unless-stopped
     ports:
       - "8080:8080"
-    environment:
-      DATABASE_URL: postgres://${DB_USER:-user}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-guardiaodb}?sslmode=disable
-      REDIS_ADDR: cache:6379
-      REDIS_PASSWORD: ""
-      GO_ENV: production
     depends_on:
       db:
         condition: service_healthy
       cache:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - backend
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: "512M"
 
-  # ------------------------------------
-  # 4. Serviço de Worker (Go - Processamento Assíncrono)
-  # ------------------------------------
   worker:
     build:
       context: .
       dockerfile: Dockerfile
+    env_file:
+      - .env.development # ou .env.production
     container_name: guardian_worker
-    restart: on-failure
+    restart: unless-stopped
     entrypoint: ["/app/worker"]
-    environment:
-      DATABASE_URL: postgres://${DB_USER:-user}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-guardiaodb}?sslmode=disable
     depends_on:
       db:
         condition: service_healthy
     networks:
       - backend
+    deploy:
+      replicas: 2
 
-# ------------------------------------
-# Configurações de Volumes e Rede
-# ------------------------------------
 volumes:
   postgres_data:
   redis_data:

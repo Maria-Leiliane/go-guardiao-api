@@ -3,15 +3,34 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// A chave secreta para assinar os tokens (em produção, deve vir de um gerenciador de segredos).
-var jwtKey = []byte("sua-chave-secreta-muito-forte")
+// contextKey define um tipo para evitar colisão de chaves no contexto.
+type contextKey string
+
+const (
+	userIDKey contextKey = "userID"
+	emailKey  contextKey = "userEmail"
+)
+
+// jwtKey busca a chave secreta de variável de ambiente.
+var jwtKey = []byte(getEnv("JWT_SECRET", "sua-chave-secreta-muito-forte"))
+
+// getEnv busca variável de ambiente ou retorna fallback.
+func getEnv(k, fallback string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return fallback
+}
 
 // Claims define a estrutura dos dados que serão armazenados no token JWT.
 type Claims struct {
@@ -20,87 +39,103 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-// GetUserIDFromContext é uma função auxiliar para obter o ID do usuário
-// do contexto da requisição, após a validação do JWT.
+// GetUserIDFromContext obtém o ID do usuário do contexto.
 func GetUserIDFromContext(r *http.Request) (string, error) {
-	userID, ok := r.Context().Value("userID").(string)
+	userID, ok := r.Context().Value(userIDKey).(string)
 	if !ok {
-		return "", fmt.Errorf("user ID não encontrado no contexto")
+		return "", errors.New("user ID não encontrado no contexto")
 	}
 	return userID, nil
 }
 
 // GenerateToken cria e assina um novo token JWT para um usuário.
-func GenerateToken(userID, email string) (string, error) {
-	expirationTime := time.Now().Add(24 * time.Hour)
+func GenerateToken(userID, email string, expiration time.Duration) (string, error) {
 	claims := &Claims{
 		UserID: userID,
 		Email:  email,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiration)),
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(jwtKey)
 }
 
-// JWTAuthMiddleware é um middleware para proteger rotas. Ele verifica
-// a validade do token JWT em cada requisição.
+// JWTAuthMiddleware protege rotas verificando o token JWT.
 func JWTAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" || len(authHeader) < 7 || authHeader[:7] != "Bearer " {
-			http.Error(w, "Token inválido ou ausente", http.StatusUnauthorized)
+		if !strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+			errorJSON(w, http.StatusUnauthorized, "Token inválido ou ausente")
 			return
 		}
-		tokenString := authHeader[7:]
+		tokenString := strings.TrimSpace(authHeader[7:])
+
 		claims := &Claims{}
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+			// Verifica se o algoritmo é realmente HS256
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("método de assinatura inválido")
+			}
 			return jwtKey, nil
 		})
 
 		if err != nil || !token.Valid {
-			http.Error(w, "Token inválido ou expirado", http.StatusUnauthorized)
+			errorJSON(w, http.StatusUnauthorized, "Token inválido ou expirado")
 			return
 		}
 
-		// Se o token for válido, anexa o ID do usuário ao contexto da requisição
-		// para que os handlers possam acessá-lo.
-		ctx := context.WithValue(r.Context(), "userID", claims.UserID)
+		// Adiciona dados ao contexto
+		ctx := context.WithValue(r.Context(), userIDKey, claims.UserID)
+		ctx = context.WithValue(ctx, emailKey, claims.Email)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-// HandleRegister simula o processo de registro de usuário.
-// Retorna um token JWT para o cliente.
-func HandleRegister(w http.ResponseWriter, r *http.Request) {
-	// Na implementação real, você validaria os dados e criaria um novo registro no banco de dados.
-	mockUserID := "mock-user-456"
-	token, _ := GenerateToken(mockUserID, "novo_usuario@guardiao.com")
-
+// errorJSON envia um erro padronizado em JSON.
+func errorJSON(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{
-		"message": "Usuário registrado com sucesso",
-		"token":   token,
-		"user_id": mockUserID,
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"error": message,
 	})
 }
 
-// HandleLogin simula o processo de login.
-// Retorna um token JWT se as credenciais estiverem corretas.
-func HandleLogin(w http.ResponseWriter, r *http.Request) {
-	// Na implementação real, você verificaria as credenciais contra o banco de dados.
-	mockUserID := "mock-user-456"
-	token, _ := GenerateToken(mockUserID, "novo_usuario@guardiao.com")
+// HandleRegister simula registro de usuário e retorna um token JWT.
+func HandleRegister(w http.ResponseWriter, r *http.Request) {
+	userID := "mock-user-456"
+	email := "novo_usuario@guardiao.com"
 
-	w.Header().Set("Content-Type", "application/json")
-	err := json.NewEncoder(w).Encode(map[string]string{
-		"message": "Login realizado com sucesso",
-		"token":   token,
-		"user_id": mockUserID,
-	})
+	token, err := GenerateToken(userID, email, 24*time.Hour)
 	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "Falha ao gerar token")
 		return
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"message": "Usuário registrado com sucesso",
+		"token":   token,
+		"user_id": userID,
+	})
+}
+
+// HandleLogin simula login de usuário e retorna um token JWT.
+func HandleLogin(w http.ResponseWriter, r *http.Request) {
+	userID := "mock-user-456"
+	email := "novo_usuario@guardiao.com"
+
+	token, err := GenerateToken(userID, email, 24*time.Hour)
+	if err != nil {
+		errorJSON(w, http.StatusInternalServerError, "Falha ao gerar token")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"message": "Login realizado com sucesso",
+		"token":   token,
+		"user_id": userID,
+	})
 }

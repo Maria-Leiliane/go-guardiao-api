@@ -1,44 +1,58 @@
-# Enviroments
-.env
-
-# Binaries
-main
-go-ecommerce-base
+# Go build files
+/bin/
+/build/
+/dist/
 *.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
 
-#Swagger
-docs/
+# Go workspace and cache
+*.log
+*.cache
+*.tmp
+*.swp
+*.swo
+*.DS_Store
 
-#Ides
-.idea/*
-.vscode/*
+# Go modules vendor dir
+/vendor/
+
+# IDE/editor files
+.vscode/
+.idea/
+*.iml
 
 # OS files
 .DS_Store
-*~
 Thumbs.db
 
-# tests
+# Environment files (NUNCA versionar arquivos reais de env!)
+.env
+.env.*
+!.env.example
+
+# Docker artifacts
+postgres_data/
+redis_data/
+*.pid
+
+# Coverage files
+*.coverprofile
 coverage.out
 
-# Unificade temporay front-end
-# Logs
-*.log
+# Node/npm (se usar frontend junto)
+node_modules/
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-!.vscode/extensions.json
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# Others
+*.gz
+*.tgz
+*.tar
+*.zip
+*.bak
+*.old
+*.orig
