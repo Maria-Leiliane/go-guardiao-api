@@ -67,3 +67,4 @@ help:
 	@echo "  make clean       # Remove containers e volumes"
 	@echo "  make shell-api   # Acessa o shell da API"
 	@echo "  make shell-db    # Acessa o shell do DB"
+

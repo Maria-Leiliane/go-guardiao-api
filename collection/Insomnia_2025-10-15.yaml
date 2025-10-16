@@ -1,0 +1,662 @@
+type: collection.insomnia.rest/5.0
+name: Guardiao da Saúde
+meta:
+  id: wrk_a0b5afdfb7d64103ad8ba9266f5d830c
+  created: 1760577172893
+  modified: 1760577172893
+  description: ""
+collection:
+  - name: Error Tests
+    meta:
+      id: fld_23702b3631c944f0bd3a0744305b6a84
+      created: 1699999999999
+      modified: 1699999999999
+      sortKey: -1760577172912
+      description: ""
+    children:
+      - url: "{{ base_url }}/user/profile"
+        name: "[401] GET Profile sem token"
+        meta:
+          id: req_02ab354c7388472cb527fe68856c89d4
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: Espera 401 e body {"error":"Token inválido ou ausente"}
+          sortKey: -1760577172913
+        method: GET
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ base_url }}/user/profile"
+        name: "[400] PUT Profile JSON inválido"
+        meta:
+          id: req_05e01fd399374b4685e9f0e4ab1d05b7
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: Espera 400 e body {"error":"Requisição inválida."}
+          sortKey: -1760577172914
+        method: PUT
+        body:
+          mimeType: application/json
+          text: "{ name: Maria, email: sem-aspas@erro.com }"
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: Bearer {% response 'body', 'req_login', 'json', '$.token' %}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ base_url }}/habits/{{ habit_id }}/log"
+        name: "[400] POST Log Habit JSON inválido"
+        meta:
+          id: req_366f10657a5e4e1492072d1de16ef921
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: Espera 400 e body {"error":"Requisição inválida."}
+          sortKey: -1760577172914
+        method: POST
+        body:
+          mimeType: application/json
+          text: '{ "value": "texto" }'
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: Bearer {% response 'body', 'req_login', 'json', '$.token' %}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ base_url }}/mana/balance"
+        name: "[404] Método não suportado (ex.: PUT em /mana/balance)"
+        meta:
+          id: req_70b0f0a7d09f4e4290510cc239ee44b6
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: Gorilla Mux retorna 404 para métodos não casados (a menos que
+            UseEncodedPath/StrictMethod seja configurado).
+          sortKey: -1760577172916
+        method: PUT
+        headers:
+          - name: Authorization
+            value: Bearer {% response 'body', 'req_login', 'json', '$.token' %}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ base_url }}/user/profile"
+        name: "[401] GET Profile com token inválido"
+        meta:
+          id: req_cde2b31f507f473b842bcd50ef081d86
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: Espera 401 e body {"error":"Token inválido ou expirado"}
+          sortKey: -1760577172913
+        method: GET
+        headers:
+          - name: Authorization
+            value: Bearer {{ invalid_jwt }}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ base_url }}/mana/redeem"
+        name: "[400] POST Redeem JSON inválido"
+        meta:
+          id: req_d0905fa86d654e40bad0e58e780ef0c3
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: Espera 400 e body {"error":"Requisição inválida (RewardID
+            ausente)."} caso o decode falhe.
+          sortKey: -1760577172915
+        method: POST
+        body:
+          mimeType: application/json
+          text: "{ reward_id: sem-aspas }"
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: Bearer {% response 'body', 'req_login', 'json', '$.token' %}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ base_url }}/rota-que-nao-existe"
+        name: "[404] Rota inexistente"
+        meta:
+          id: req_f6c64eec77104ba0a4d236efe0652169
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: Espera 404 (mux padrão).
+          sortKey: -1760577172915
+        method: GET
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: Habits
+    meta:
+      id: fld_60c77399cb7f46e79782f89732f10104
+      created: 1699999999999
+      modified: 1699999999999
+      sortKey: -1760577172903
+      description: ""
+    children:
+      - url: "{{ base_url }}/habits/{{ habit_id }}/log"
+        name: Log Habit (POST /habits/{habitId}/log)
+        meta:
+          id: req_1f7fc9fc101244c483529dd3c4f394ab
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: ""
+          sortKey: -1760577172906
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "value": 1,
+              "log_date": "2025-10-15T23:00:00Z"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: Bearer {% response 'body', 'req_login', 'json', '$.token' %}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ base_url }}/habits"
+        name: Create Habit
+        meta:
+          id: req_427dcc008cf74bfe87e646e703fab0fa
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: ""
+          sortKey: -1760577172904
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "Beber água",
+              "description": "Beber 2 litros de água por dia"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: Bearer {% response 'body', 'req_login', 'json', '$.token' %}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ base_url }}/habits/{{ habit_id }}/logs"
+        name: List Habit Logs (GET /habits/{habitId}/logs)
+        meta:
+          id: req_63f4381a44d54311be9be9f7a460e1fd
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: ""
+          sortKey: -1760577172907
+        method: GET
+        headers:
+          - name: Authorization
+            value: Bearer {% response 'body', 'req_login', 'json', '$.token' %}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ base_url }}/habits"
+        name: List Habits
+        meta:
+          id: req_e9367a6a471a4cea8e211bba542b751b
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: ""
+          sortKey: -1760577172905
+        method: GET
+        headers:
+          - name: Authorization
+            value: Bearer {% response 'body', 'req_login', 'json', '$.token' %}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: User Profile
+    meta:
+      id: fld_6348db73ab924058baa862089d2d7c4f
+      created: 1699999999999
+      modified: 1699999999999
+      sortKey: -1760577172898
+      description: ""
+    children:
+      - url: "{{ base_url }}/user/profile"
+        name: Update Profile
+        meta:
+          id: req_1295f238c1074c059f2c2007427be0f5
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: ""
+          sortKey: -1760577172900
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "Maria Leiliane Lobo da Silva",
+              "email": "novoemail@email.com"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: Bearer {% response 'body', 'req_login', 'json', '$.token' %}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ base_url }}/user/profile"
+        name: Get Profile
+        meta:
+          id: req_453bb2a24dcc44cc8275e964786dc2dd
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: ""
+          sortKey: -1760577172899
+        method: GET
+        headers:
+          - name: Authorization
+            value: Bearer {% response 'body', 'req_login', 'json', '$.token' %}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: Support Contact
+    meta:
+      id: fld_67137cd0603147c8bfab1ac04362dc99
+      created: 1699999999999
+      modified: 1699999999999
+      sortKey: -1760577172900
+      description: ""
+    children:
+      - url: "{{ base_url }}/user/support-contact"
+        name: List Support Contacts
+        meta:
+          id: req_32db3fd8b8e547fc8e02f7cdf7fcdfcb
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: ""
+          sortKey: -1760577172902
+        method: GET
+        headers:
+          - name: Authorization
+            value: Bearer {% response 'body', 'req_login', 'json', '$.token' %}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ base_url }}/user/support-contact"
+        name: Add Support Contact
+        meta:
+          id: req_55cfd25d86044469a8f18428e34be53e
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: ""
+          sortKey: -1760577172901
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "Contato Apoio",
+              "phone": "11999999999"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: Bearer {% response 'body', 'req_login', 'json', '$.token' %}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ base_url }}/user/support-contact/{{ contact_id }}"
+        name: Delete Support Contact
+        meta:
+          id: req_7904b33830a84cbdab88fa7a4483328e
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: Defina contact_id no ambiente antes de enviar.
+          sortKey: -1760577172902
+        method: DELETE
+        headers:
+          - name: Authorization
+            value: Bearer {% response 'body', 'req_login', 'json', '$.token' %}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: Health
+    meta:
+      id: fld_8b619704e3854f529d69107460b525f2
+      created: 1699999999999
+      modified: 1699999999999
+      sortKey: -1760577172911
+      description: ""
+    children:
+      - url: http://localhost:8080/health
+        name: API Health
+        meta:
+          id: req_2a609b5fbd454939a87554a537db9274
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: ""
+          sortKey: -1760577172911
+        method: GET
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: Auth
+    meta:
+      id: fld_8f2f25af79074d7fa7e01cc097d87550
+      created: 1699999999999
+      modified: 1699999999999
+      sortKey: -1760577172895
+      description: ""
+    children:
+      - url: "{{ base_url }}/auth/register"
+        name: Register
+        meta:
+          id: req_03aa369746904f76b55bacb79f725e03
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: ""
+          sortKey: -1760577172896
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "Maria Lobo",
+              "email": "user@email.com",
+              "password": "123456"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ base_url }}/auth/login"
+        name: Login
+        meta:
+          id: req_a9221c3704d3460a989f9b101bf39047
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: ""
+          sortKey: -1760577172898
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "email": "user@email.com",
+              "password": "123456"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ base_url }}/auth/register"
+        name: Register (Duplicate Email - erro esperado)
+        meta:
+          id: req_ca823a8071d444bb9f75af2181323762
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: "Se o backend validar duplicidade, deve retornar erro (ex: 409)."
+          sortKey: -1760577172897
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "Maria Lobo",
+              "email": "user@email.com",
+              "password": "123456"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: Mana & Gamification
+    meta:
+      id: fld_b78eff3447ad4506922fa4b3a25cd219
+      created: 1699999999999
+      modified: 1699999999999
+      sortKey: -1760577172908
+      description: ""
+    children:
+      - url: "{{ base_url }}/leaderboard"
+        name: Leaderboard
+        meta:
+          id: req_53b4c1037659470ebaa04cfacf67fe7e
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: ""
+          sortKey: -1760577172910
+        method: GET
+        headers:
+          - name: Authorization
+            value: Bearer {% response 'body', 'req_login', 'json', '$.token' %}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ base_url }}/mana/redeem"
+        name: Redeem Mana Reward
+        meta:
+          id: req_88bea82e901f45adb2d85424ae746e94
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: ""
+          sortKey: -1760577172909
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "reward_id": "{{ reward_id }}"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: Bearer {% response 'body', 'req_login', 'json', '$.token' %}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ base_url }}/challenges"
+        name: List Challenges
+        meta:
+          id: req_abe88cb1730544f9a4b6e9c51a519c79
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: ""
+          sortKey: -1760577172910
+        method: GET
+        headers:
+          - name: Authorization
+            value: Bearer {% response 'body', 'req_login', 'json', '$.token' %}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ base_url }}/mana/balance"
+        name: Get Mana Balance
+        meta:
+          id: req_cce6ab660ae24641add26effe3349829
+          created: 1699999999999
+          modified: 1699999999999
+          isPrivate: false
+          description: ""
+          sortKey: -1760577172908
+        method: GET
+        headers:
+          - name: Authorization
+            value: Bearer {% response 'body', 'req_login', 'json', '$.token' %}
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+cookieJar:
+  name: Default Jar
+  meta:
+    id: jar_a096bb7a642419b63baf0b5449343435ec88f0d9
+    created: 1760577172920
+    modified: 1760577172920
+environments:
+  name: Base Environment
+  meta:
+    id: env_49cbce2f4aeb4e0d817a2755288d1736
+    created: 1699999999999
+    modified: 1699999999999
+    isPrivate: false
+  data:
+    base_url: http://localhost:8080/api/v1
+    habit_id: h1
+    contact_id: ""
+    reward_id: reward-123
+    invalid_jwt: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid.invalid
