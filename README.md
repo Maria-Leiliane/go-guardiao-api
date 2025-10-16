@@ -62,7 +62,20 @@ Observações:
 
 - Docker Desktop (ou Docker Engine + Docker Compose v2)
 - Make (opcional, recomendado)
-- Go 1.22+ (opcional — para desenvolvimento e testes fora de Docker)
+- Go 1.22+
+
+## 🧪 Testes End-to-End (E2E)
+
+Execute os fluxos principais (health, auth, perfil, hábitos, logs, erros).
+
+Com backend local em 8080:
+```bash
+E2E_BASE_URL=http://localhost:8080/api/v1 go test ./tests/e2e -v -count=1 -timeout=10m
+```
+
+> Observação: o Makefile atual não possui alvos e2e. Se você quiser rodar a API em outra porta (ex.: 18080) com um overlay dedicado, posso adicionar docker-compose.e2e.yml e targets make e2e.
+
+---
 
 ## ▶️ Como rodar (Desenvolvimento)
 
@@ -70,8 +83,13 @@ Observações:
 
 2) Suba a stack (base + dev):
 ```bash
-make up-dev ENV_FILE=docker/.env.development
-# ou:
+make up
+# ou explicitamente:
+make up-dev
+```
+
+Alternativa manual (sem Makefile):
+```bash
 docker compose --env-file docker/.env.development \
   -f docker/docker-compose.yml \
   -f docker/docker-compose.dev.yml up --build -d
@@ -99,17 +117,6 @@ Base URL local do backend:
     - Dev: http://localhost:8080/api/v1
     - Prod: URL pública do backend (ex.: Render)
 - Backend deve permitir a origem do frontend via CORS_ORIGINS.
-
-## 🧪 Testes End-to-End (E2E)
-
-Execute os fluxos principais (health, auth, perfil, hábitos, logs, erros).
-
-Com backend local em 8080:
-```bash
-E2E_BASE_URL=http://localhost:8080/api/v1 go test ./tests/e2e -v -count=1 -timeout=10m
-```
-
-Se preferir isolar em outra porta (18080), adicione um overlay docker-compose.e2e.yml e alvos make e2e.
 
 ## ☁️ Plataforma AWS (SQS/SNS)
 
@@ -152,7 +159,7 @@ Use o blueprint (render.yaml) na raiz do repo. Exemplo no arquivo abaixo.
 
 ## 🔌 Insomnia Collection
 
-Há uma collection cobrindo as rotas principais. Se desejar, inclua o JSON em ./docs/insomnia/ e atualize aqui o link.
+Há uma collection cobrindo as rotas principais.Em [docs](https://github.com/Maria-Leiliane/go-guardiao-api/tree/developer/docs/collection).
 
 ## 🔑 Variáveis de Ambiente (resumo)
 
