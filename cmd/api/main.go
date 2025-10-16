@@ -113,7 +113,7 @@ func setupRouter(dbClient *db.Client, cacheClient *cache.Client) *mux.Router {
 }
 
 // WrapWithCORS aplica CORS usando a lista de origens permitidas.
-// Se CORS_ORIGINS estiver vazio, usa defaults úteis para dev.
+// Se CORS_ORIGINS estiver vazio, usa ‘defaults’ úteis para dev.
 func WrapWithCORS(h http.Handler, corsOriginsEnv string) http.Handler {
 	var origins []string
 	if strings.TrimSpace(corsOriginsEnv) != "" {
