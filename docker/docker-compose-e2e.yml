@@ -1,0 +1,17 @@
+services:
+  api:
+    env_file: ../docker/.env.e2e
+    ports:
+      - "18080:8080"
+    environment:
+      # Garante valores para o ambiente E2E
+      PORT: 8080
+      CORS_ORIGINS: "http://localhost:3000,https://localhost:3000"
+      # Caso o .env.e2e não traga tudo, herdamos daqui também
+      DATABASE_URL: postgres://user:devpassword@db:5432/guardiaodb_e2e?sslmode=disable
+      REDIS_ADDR: cache:6379
+
+  worker:
+    env_file: ../docker/.env.e2e
+    environment:
+      WORKER_ENABLE_MOCK: "true"

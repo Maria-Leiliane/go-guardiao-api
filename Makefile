@@ -1,70 +1,91 @@
-# Makefile para Guardião da Saúde - Ambiente Dev e Prod
+# Makefile simples, com comandos curtos e checks inteligentes
 
-# Variável de ambiente padrão para dev (pode ser sobrescrita)
-ENV_FILE ?= .env.development
+# Nome do projeto (isola stacks dev/prd)
+PROJECT_NAME ?= guardiao
 
-# Build da imagem Docker
-.PHONY: build
-build:
-	docker build -t go-guardiao-api .
+# Arquivos de env padrão (sem precisar passar ENV_FILE)
+DEV_ENV_FILE ?= docker/.env.development
+PRD_ENV_FILE ?= docker/.env.production
 
-# Sobe todos os serviços em modo detach para desenvolvimento
-.PHONY: up-dev
-up-dev:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d
+# Compose files (base + overlays)
+COMPOSE_BASE := -f docker/docker-compose.yml
+COMPOSE_DEV  := $(COMPOSE_BASE) -f docker/docker-compose.dev.yml
+COMPOSE_PRD  := $(COMPOSE_BASE) -f docker/docker-compose.prd.yml
 
-# Sobe todos os serviços em modo detach para produção
-.PHONY: up-prd
-up-prd:
-	docker compose -f docker-compose.yml -f docker-compose.prd.yml up --build -d
+# Comandos docker compose prontos
+DC_DEV := docker compose --env-file $(DEV_ENV_FILE) -p $(PROJECT_NAME)-dev $(COMPOSE_DEV)
+DC_PRD := docker compose --env-file $(PRD_ENV_FILE) -p $(PROJECT_NAME)-prd $(COMPOSE_PRD)
 
-# Para todos os serviços
-.PHONY: down
-down:
-	docker compose down
+# Auto-detecção dos Dockerfiles (suporta hífen ou ponto)
+DOCKERFILES_DIR ?= docker
+DOCKERFILE_API    := $(firstword $(wildcard $(DOCKERFILES_DIR)/Dockerfile-api $(DOCKERFILES_DIR)/Dockerfile.api))
+DOCKERFILE_WORKER := $(firstword $(wildcard $(DOCKERFILES_DIR)/Dockerfile-worker $(DOCKERFILES_DIR)/Dockerfile.worker))
 
-# Logs dos containers em tempo real
-.PHONY: logs
-logs:
-	docker compose logs -f
+# ========= Alvos principais =========
+.PHONY: up down logs ps up-dev up-prd down-dev down-prd logs-dev logs-prd ps-dev ps-prd clean-dev clean-prd build build-api build-worker test doctor
 
-# Status dos containers
-.PHONY: ps
-ps:
-	docker compose ps
+# Aliases simples (dev por padrão)
+up: up-dev
+down: down-dev
+logs: logs-dev
+ps: ps-dev
 
-# Executa testes unitários do Go (no host)
-.PHONY: test
+# Dev
+up-dev: doctor
+	$(DC_DEV) up --build -d
+down-dev:
+	$(DC_DEV) down
+logs-dev:
+	$(DC_DEV) logs -f
+ps-dev:
+	$(DC_DEV) ps
+clean-dev:
+	$(DC_DEV) down -v
+
+# Prod (overlay local)
+up-prd: doctor
+	$(DC_PRD) up --build -d
+down-prd:
+	$(DC_PRD) down
+logs-prd:
+	$(DC_PRD) logs -f
+ps-prd:
+	$(DC_PRD) ps
+clean-prd:
+	$(DC_PRD) down -v
+
+# Builds diretos (sem compose)
+build: build-api build-worker
+build-api:
+	@if [ -z "$(DOCKERFILE_API)" ]; then echo "ERRO: Dockerfile da API não encontrado em $(DOCKERFILES_DIR)/Dockerfile-api ou Dockerfile.api"; exit 1; fi
+	docker build -f $(DOCKERFILE_API) -t $(PROJECT_NAME)-api:local .
+build-worker:
+	@if [ -z "$(DOCKERFILE_WORKER)" ]; then echo "ERRO: Dockerfile do Worker não encontrado em $(DOCKERFILES_DIR)/Dockerfile-worker ou Dockerfile.worker"; exit 1; fi
+	docker build -f $(DOCKERFILE_WORKER) -t $(PROJECT_NAME)-worker:local .
+
+# Testes Go (no host)
 test:
 	go test ./...
 
-# Limpa volumes/dados (cuidado: apaga tudo!)
-.PHONY: clean
-clean:
-	docker compose down -v
-
-# Acesso ao shell do container API (ajuste para o nome real do container)
-.PHONY: shell-api
-shell-api:
-	docker exec -it $$(docker compose ps -q api) /bin/sh
-
-# Acesso ao shell do container DB (ajuste para o nome real do container)
-.PHONY: shell-db
-shell-db:
-	docker exec -it $$(docker compose ps -q db) sh
-
-# Ajuda
-.PHONY: help
-help:
-	@echo "Comandos principais:"
-	@echo "  make build       # Builda a imagem Docker"
-	@echo "  make up-dev      # Sobe containers para desenvolvimento"
-	@echo "  make up-prd      # Sobe containers para produção"
-	@echo "  make down        # Para containers"
-	@echo "  make logs        # Logs dos containers"
-	@echo "  make ps          # Status dos containers"
-	@echo "  make test        # Roda os testes Go"
-	@echo "  make clean       # Remove containers e volumes"
-	@echo "  make shell-api   # Acessa o shell da API"
-	@echo "  make shell-db    # Acessa o shell do DB"
-
+# Verificações e diagnóstico
+doctor:
+	@echo "==> Verificando arquivos essenciais..."
+	@for f in docker/docker-compose.yml docker/docker-compose.dev.yml docker/docker-compose.prd.yml; do \
+		[ -f $$f ] || { echo "ERRO: Arquivo ausente: $$f"; exit 1; }; \
+	done
+	@if [ -z "$(DOCKERFILE_API)" ]; then \
+		echo "ERRO: Dockerfile da API não encontrado."; \
+		echo "Procure um destes: $(DOCKERFILES_DIR)/Dockerfile-api OU $(DOCKERFILES_DIR)/Dockerfile.api"; \
+		exit 1; \
+	fi
+	@if [ -z "$(DOCKERFILE_WORKER)" ]; then \
+		echo "ERRO: Dockerfile do Worker não encontrado."; \
+		echo "Procure um destes: $(DOCKERFILES_DIR)/Dockerfile-worker OU $(DOCKERFILES_DIR)/Dockerfile.worker"; \
+		exit 1; \
+	fi
+	@echo "OK: Compose e Dockerfiles encontrados."
+	@echo "  API Dockerfile:    $(DOCKERFILE_API)"
+	@echo "  Worker Dockerfile: $(DOCKERFILE_WORKER)"
+	@echo "  Dev env-file:      $(DEV_ENV_FILE)"
+	@echo "  Prd env-file:      $(PRD_ENV_FILE)"
+	@echo "Dica: use 'make up' (dev), 'make down', 'make logs'."

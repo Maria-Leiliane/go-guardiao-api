@@ -1,19 +1,17 @@
 services:
   api:
-    env_file: .env.production
-    # Não expõe porta diretamente (use proxy reverso)
+    env_file: ./.env.production
+    # Em prod local normalmente não expomos a porta diretamente (use proxy reverso)
+    # A seção deploy é ignorada pelo docker compose standalone (só Swarm/K8s)
     deploy:
       replicas: 3
       resources:
         limits:
           cpus: "0.50"
           memory: "512M"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.guardian.rule=Host(`api.seuprojeto.com`)"
 
   worker:
-    env_file: .env.production
+    env_file: ./.env.production
     deploy:
       replicas: 2
       resources:

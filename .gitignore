@@ -33,7 +33,7 @@ Thumbs.db
 # Environment files (NUNCA versionar arquivos reais de env!)
 .env
 .env.*
-!.env.example
+!docker/.env.example
 
 # Docker artifacts
 postgres_data/

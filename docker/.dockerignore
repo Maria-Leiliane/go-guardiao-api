@@ -1,0 +1,12 @@
+.git
+.gitignore
+Dockerfile
+Dockerfile-api
+Dockerfile-worker
+README.md
+docs
+node_modules
+dist
+build
+tmp
+*.log
