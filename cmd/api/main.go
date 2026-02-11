@@ -92,8 +92,12 @@ func setupRouter(dbClient *db.Client, cacheClient *cache.Client) *mux.Router {
 	r := mux.NewRouter().StrictSlash(true)
 
 	// Rotas Públicas (Auth)
-	r.HandleFunc("/api/v1/auth/register", auth.HandleRegister).Methods("POST")
-	r.HandleFunc("/api/v1/auth/login", auth.HandleLogin).Methods("POST")
+	r.HandleFunc("/api/v1/auth/register", func(w http.ResponseWriter, r *http.Request) {
+		auth.HandleRegisterWithDB(w, r, dbClient)
+	}).Methods("POST")
+	r.HandleFunc("/api/v1/auth/login", func(w http.ResponseWriter, r *http.Request) {
+		auth.HandleLoginWithDB(w, r, dbClient)
+	}).Methods("POST")
 
 	// Rotas Protegidas (API) - JWT Middleware
 	apiRouter := r.PathPrefix("/api/v1").Subrouter()
