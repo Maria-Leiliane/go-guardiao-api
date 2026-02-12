@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"github.com/gorilla/handlers"
@@ -107,7 +108,7 @@ func setupRouter(dbClient *db.Client, cacheClient *cache.Client) *mux.Router {
 		_, _ = w.Write([]byte("ok"))
 	}).Methods("GET")
 
-	// (Opcional) Captura de preflight genérico
+	// Captura de preflight genérico
 	r.PathPrefix("/").Methods(http.MethodOptions).HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
@@ -132,15 +133,28 @@ func main() {
 	// CORS (Gorilla)
 	origins := []string{
 		"http://localhost:4200",
-		"https://seu-projeto.vercel.app",
+		"https://guardiao-frontend.vercel.app",
 		"https://*.vercel.app",
 	}
+
 	corsHandler := handlers.CORS(
 		handlers.AllowedOrigins(origins),
 		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}),
 		handlers.AllowedHeaders([]string{"Authorization", "Content-Type"}),
-		handlers.AllowCredentials(), // remova se não precisar de cookies/credenciais
+		handlers.AllowCredentials(), // cookies/credenciais
 		handlers.MaxAge(12*60*60),
+		handlers.AllowedOriginValidator(func(origin string) bool {
+			if origin == "http://localhost:4200" {
+				return true
+			}
+			if origin == "https://guardiao-frontend.vercel.app" {
+				return true
+			} // front domínio
+			if strings.HasPrefix(origin, "https://") && strings.HasSuffix(origin, ".vercel.app") {
+				return true
+			} // previews
+			return false
+		}),
 	)
 
 	srv := &http.Server{
