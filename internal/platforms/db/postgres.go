@@ -59,57 +59,30 @@ func (c *Client) Close() {
 	}
 }
 
+// ensureColumn adiciona uma coluna se ela não existir (evita problemas de sintaxe/compat)
+func ensureColumn(ctx context.Context, tx pgx.Tx, table, column, definition string) error {
+	var exists bool
+	const q = `
+		SELECT EXISTS (
+			SELECT 1
+			FROM information_schema.columns
+			WHERE table_name = $1 AND column_name = $2
+		);`
+	if err := tx.QueryRow(ctx, q, table, column).Scan(&exists); err != nil {
+		return fmt.Errorf("falha ao checar coluna %s.%s: %w", table, column, err)
+	}
+	if exists {
+		return nil
+	}
+	stmt := fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s %s`, table, column, definition)
+	if _, err := tx.Exec(ctx, stmt); err != nil {
+		return fmt.Errorf("falha ao adicionar coluna %s.%s: %w", table, column, err)
+	}
+	return nil
+}
+
 func (c *Client) InitSchema(ctx context.Context) error {
 	log.Println("Verificando e inicializando o esquema do banco de dados...")
-	schemaSQL := []string{
-		`CREATE TABLE IF NOT EXISTS users (
-			id UUID PRIMARY KEY,
-			email VARCHAR(255) UNIQUE NOT NULL,
-			name VARCHAR(255),
-			theme VARCHAR(50),
-			created_at TIMESTAMP DEFAULT NOW()
-		);`,
-
-		`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash SET NOT NULL TEXT;`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique_idx ON users (email);`,
-
-		`CREATE TABLE IF NOT EXISTS user_mana (
-			user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-			balance INTEGER NOT NULL DEFAULT 0,
-			updated_at TIMESTAMP DEFAULT NOW()
-		);`,
-		`CREATE TABLE IF NOT EXISTS mana_transactions (
-			id SERIAL PRIMARY KEY,
-			user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-			type VARCHAR(50) NOT NULL,
-			amount INTEGER NOT NULL,
-			reference_id VARCHAR(255),
-			created_at TIMESTAMP DEFAULT NOW()
-		);`,
-		`CREATE TABLE IF NOT EXISTS support_contacts (
-			contact_id UUID PRIMARY KEY,
-			user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-			contact_email VARCHAR(255) NOT NULL,
-			nickname VARCHAR(255),
-			notification_preference VARCHAR(50),
-			created_at TIMESTAMP DEFAULT NOW()
-		);`,
-		`CREATE TABLE IF NOT EXISTS habits (
-			id UUID PRIMARY KEY,
-			user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-			name VARCHAR(255) NOT NULL,
-			goal_type VARCHAR(50),
-			frequency VARCHAR(50),
-			created_at TIMESTAMP DEFAULT NOW()
-		);`,
-		`CREATE TABLE IF NOT EXISTS habit_logs (
-			id SERIAL PRIMARY KEY,
-			habit_id UUID REFERENCES habits(id) ON DELETE CASCADE,
-			user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-			value INTEGER NOT NULL,
-			timestamp TIMESTAMP DEFAULT NOW()
-		);`,
-	}
 	tx, err := c.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -119,11 +92,85 @@ func (c *Client) InitSchema(ctx context.Context) error {
 			_ = tx.Rollback(ctx)
 		}
 	}()
-	for _, sql := range schemaSQL {
-		if _, err = tx.Exec(ctx, sql); err != nil {
-			return fmt.Errorf("falha ao executar SQL de inicialização: %w", err)
-		}
+
+	// Tabelas principais
+	if _, err = tx.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS users (
+			id UUID PRIMARY KEY,
+			email VARCHAR(255) UNIQUE NOT NULL,
+			name VARCHAR(255),
+			theme VARCHAR(50),
+			created_at TIMESTAMP DEFAULT NOW()
+		);`); err != nil {
+		return fmt.Errorf("falha ao criar tabela users: %w", err)
 	}
+
+	// Adiciona password_hash (varchar 72) apenas se não existir
+	if err = ensureColumn(ctx, tx, "users", "password_hash", "VARCHAR(72)"); err != nil {
+		return err
+	}
+
+	if _, err = tx.Exec(ctx, `
+		CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique_idx ON users (email);`); err != nil {
+		return fmt.Errorf("falha ao criar índice de email: %w", err)
+	}
+
+	if _, err = tx.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS user_mana (
+			user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+			balance INTEGER NOT NULL DEFAULT 0,
+			updated_at TIMESTAMP DEFAULT NOW()
+		);`); err != nil {
+		return fmt.Errorf("falha ao criar tabela user_mana: %w", err)
+	}
+
+	if _, err = tx.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS mana_transactions (
+			id SERIAL PRIMARY KEY,
+			user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+			type VARCHAR(50) NOT NULL,
+			amount INTEGER NOT NULL,
+			reference_id VARCHAR(255),
+			created_at TIMESTAMP DEFAULT NOW()
+		);`); err != nil {
+		return fmt.Errorf("falha ao criar tabela mana_transactions: %w", err)
+	}
+
+	if _, err = tx.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS support_contacts (
+			contact_id UUID PRIMARY KEY,
+			user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+			contact_email VARCHAR(255) NOT NULL,
+			nickname VARCHAR(255),
+			notification_preference VARCHAR(50),
+			created_at TIMESTAMP DEFAULT NOW()
+		);`); err != nil {
+		return fmt.Errorf("falha ao criar tabela support_contacts: %w", err)
+	}
+
+	if _, err = tx.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS habits (
+			id UUID PRIMARY KEY,
+			user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+			name VARCHAR(255) NOT NULL,
+			goal_type VARCHAR(50),
+			frequency VARCHAR(50),
+			created_at TIMESTAMP DEFAULT NOW()
+		);`); err != nil {
+		return fmt.Errorf("falha ao criar tabela habits: %w", err)
+	}
+
+	if _, err = tx.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS habit_logs (
+			id SERIAL PRIMARY KEY,
+			habit_id UUID REFERENCES habits(id) ON DELETE CASCADE,
+			user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+			value INTEGER NOT NULL,
+			timestamp TIMESTAMP DEFAULT NOW()
+		);`); err != nil {
+		return fmt.Errorf("falha ao criar tabela habit_logs: %w", err)
+	}
+
 	return tx.Commit(ctx)
 }
 
@@ -140,12 +187,12 @@ func (c *Client) CreateUser(ctx context.Context, user models.User) error {
 	if user.ID == "" {
 		user.ID = uuid.New().String()
 	}
-	// Inclui password_hash no insert
-	sqlUser := `INSERT INTO users (id, email, name, theme, password_hash) VALUES ($1, $2, $3, $4, $5)`
+	// Inclui password_hash no insert (bcrypt ~60 chars; usamos VARCHAR(72))
+	const sqlUser = `INSERT INTO users (id, email, name, theme, password_hash) VALUES ($1, $2, $3, $4, $5)`
 	if _, err = tx.Exec(ctx, sqlUser, user.ID, user.Email, user.Name, user.Theme, user.PasswordHash); err != nil {
 		return fmt.Errorf("falha ao inserir usuário: %w", err)
 	}
-	sqlMana := `INSERT INTO user_mana (user_id, balance) VALUES ($1, 0)`
+	const sqlMana = `INSERT INTO user_mana (user_id, balance) VALUES ($1, 0)`
 	if _, err = tx.Exec(ctx, sqlMana, user.ID); err != nil {
 		return fmt.Errorf("falha ao inicializar saldo de mana: %w", err)
 	}
