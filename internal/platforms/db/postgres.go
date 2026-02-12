@@ -110,8 +110,7 @@ func (c *Client) InitSchema(ctx context.Context) error {
 		return err
 	}
 	// Índice único (idempotente)
-	if _, err = tx.Exec(ctx, `
-		CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique_idx ON users (email);`); err != nil {
+	if _, err = tx.Exec(ctx, `CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique_idx ON users (email);`); err != nil {
 		return fmt.Errorf("falha ao criar índice de email: %w", err)
 	}
 
@@ -217,6 +216,17 @@ func (c *Client) GetUserByEmail(ctx context.Context, email string) (models.User,
 	return u, nil
 }
 
+// Obtém o hash de senha atual do usuário
+func (c *Client) GetUserPasswordHash(ctx context.Context, userID string) (string, error) {
+	var hash string
+	const q = `SELECT password_hash FROM users WHERE id = $1`
+	err := c.pool.QueryRow(ctx, q, userID).Scan(&hash)
+	if err != nil {
+		return "", err
+	}
+	return hash, nil
+}
+
 // Define/atualiza senha (hash) para usuário existente
 func (c *Client) SetUserPassword(ctx context.Context, userID, hash string) error {
 	const q = `UPDATE users SET password_hash = $2 WHERE id = $1`
@@ -230,6 +240,7 @@ func (c *Client) SetUserPassword(ctx context.Context, userID, hash string) error
 	return nil
 }
 
+// Atualiza nome e tema do usuário
 func (c *Client) UpdateUser(ctx context.Context, user models.User) error {
 	sql := `UPDATE users SET name = $2, theme = $3 WHERE id = $1`
 	cmdTag, err := c.pool.Exec(ctx, sql, user.ID, user.Name, user.Theme)
@@ -237,7 +248,20 @@ func (c *Client) UpdateUser(ctx context.Context, user models.User) error {
 		return err
 	}
 	if cmdTag.RowsAffected() == 0 {
-		return errors.New("usuário não encontrado")
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+// Atualiza e-mail do usuário (deve existir índice único para evitar duplicidade)
+func (c *Client) UpdateUserEmail(ctx context.Context, userID, email string) error {
+	const q = `UPDATE users SET email = $2 WHERE id = $1`
+	cmdTag, err := c.pool.Exec(ctx, q, userID, email)
+	if err != nil {
+		return fmt.Errorf("falha ao atualizar e-mail: %w", err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
 	}
 	return nil
 }

@@ -69,10 +69,11 @@ func defineServiceRoutes(router *mux.Router, dbClient *db.Client, cacheClient *c
 	// --- USUÁRIOS ---
 	router.HandleFunc("/user/profile", userService.HandleGetUserProfile).Methods("GET")
 	router.HandleFunc("/user/profile", userService.HandleUpdateProfile).Methods("PUT")
+	router.HandleFunc("/user/email", userService.HandleUpdateEmail).Methods("PUT")       // NOVO
+	router.HandleFunc("/user/password", userService.HandleUpdatePassword).Methods("PUT") // NOVO
 	router.HandleFunc("/user/support-contact", userService.HandleAddSupportContact).Methods("POST")
 	router.HandleFunc("/user/support-contact", userService.HandleGetSupportContacts).Methods("GET")
 	router.HandleFunc("/user/support-contact/{contactId}", userService.HandleDeleteSupportContact).Methods("DELETE")
-
 	// --- HÁBITOS ---
 	router.HandleFunc("/habits", habitService.HandleCreateHabit).Methods("POST")
 	router.HandleFunc("/habits", habitService.HandleGetHabits).Methods("GET")
@@ -89,7 +90,7 @@ func defineServiceRoutes(router *mux.Router, dbClient *db.Client, cacheClient *c
 func setupRouter(dbClient *db.Client, cacheClient *cache.Client) *mux.Router {
 	r := mux.NewRouter().StrictSlash(true)
 
-	// Rotas Públicas (Auth)
+	// Auth públicas
 	r.HandleFunc("/api/v1/auth/register", func(w http.ResponseWriter, r *http.Request) {
 		auth.HandleRegisterWithDB(w, r, dbClient)
 	}).Methods("POST")
