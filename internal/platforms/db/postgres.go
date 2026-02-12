@@ -69,6 +69,10 @@ func (c *Client) InitSchema(ctx context.Context) error {
 			theme VARCHAR(50),
 			created_at TIMESTAMP DEFAULT NOW()
 		);`,
+
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash SET NOT NULL TEXT;`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique_idx ON users (email);`,
+
 		`CREATE TABLE IF NOT EXISTS user_mana (
 			user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
 			balance INTEGER NOT NULL DEFAULT 0,
@@ -136,8 +140,9 @@ func (c *Client) CreateUser(ctx context.Context, user models.User) error {
 	if user.ID == "" {
 		user.ID = uuid.New().String()
 	}
-	sqlUser := `INSERT INTO users (id, email, name, theme) VALUES ($1, $2, $3, $4)`
-	if _, err = tx.Exec(ctx, sqlUser, user.ID, user.Email, user.Name, user.Theme); err != nil {
+	// Inclui password_hash no insert
+	sqlUser := `INSERT INTO users (id, email, name, theme, password_hash) VALUES ($1, $2, $3, $4, $5)`
+	if _, err = tx.Exec(ctx, sqlUser, user.ID, user.Email, user.Name, user.Theme, user.PasswordHash); err != nil {
 		return fmt.Errorf("falha ao inserir usuário: %w", err)
 	}
 	sqlMana := `INSERT INTO user_mana (user_id, balance) VALUES ($1, 0)`
@@ -155,6 +160,17 @@ func (c *Client) GetUserByID(ctx context.Context, userID string) (models.User, e
 		return models.User{}, err
 	}
 	return user, nil
+}
+
+// Novo: busca usuário por email (inclui password_hash) — necessário para login
+func (c *Client) GetUserByEmail(ctx context.Context, email string) (models.User, error) {
+	u := models.User{}
+	sql := `SELECT id, email, name, theme, password_hash FROM users WHERE email = $1 LIMIT 1`
+	err := c.pool.QueryRow(ctx, sql, email).Scan(&u.ID, &u.Email, &u.Name, &u.Theme, &u.PasswordHash)
+	if err != nil {
+		return models.User{}, err
+	}
+	return u, nil
 }
 
 func (c *Client) UpdateUser(ctx context.Context, user models.User) error {
@@ -308,6 +324,7 @@ func (c *Client) UpdateManaBalance(ctx context.Context, txData models.ManaTransa
 func (c *Client) CreateManaTransaction(ctx context.Context, tx models.ManaTransaction) error {
 	return c.UpdateManaBalance(ctx, tx)
 }
+
 func (c *Client) GetTopManaUsers(ctx context.Context, limit int) ([]models.LeaderboardEntry, error) {
 	sql := `
 		SELECT u.id, u.name, um.balance

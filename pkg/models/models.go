@@ -4,12 +4,13 @@ import "time"
 
 // User representa o perfil básico do usuário.
 type User struct {
-	ID        string    `json:"id,omitempty"`
-	Email     string    `json:"email"`
-	Name      string    `json:"name"`
-	Theme     string    `json:"theme,omitempty"` // Ex: "OutubroRosa", "Padrao"
-	CreatedAt time.Time `json:"created_at,omitempty"`
-	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	ID           string    `json:"id,omitempty"`
+	Email        string    `json:"email"`
+	Name         string    `json:"name"`
+	Theme        string    `json:"theme,omitempty"` // Ex: "OutubroRosa", "Padrao"
+	CreatedAt    time.Time `json:"created_at,omitempty"`
+	UpdatedAt    time.Time `json:"updated_at,omitempty"`
+	PasswordHash string    `json:"-"` // nunca expor
 }
 
 // UserMana representa o saldo atual de Mana do usuário.
