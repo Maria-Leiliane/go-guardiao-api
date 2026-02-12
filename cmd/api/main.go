@@ -4,15 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go-guardiao-api/internal/auth"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
 
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 
-	"go-guardiao-api/internal/auth"
 	"go-guardiao-api/internal/gamification"
 	"go-guardiao-api/internal/habits"
 	"go-guardiao-api/internal/platforms/cache"
@@ -27,20 +28,18 @@ type Config struct {
 }
 
 func loadConfig() *Config {
-	cfg := &Config{
+	return &Config{
 		DBURL:     getenv("DATABASE_URL", "postgres://user:password@db:5432/guardiaodb?sslmode=disable"),
 		RedisAddr: getenv("REDIS_ADDR", "cache:6379"),
 		Port:      getenv("PORT", "8080"),
 	}
-	return cfg
 }
 
 func getenv(env, fallback string) string {
-	val := os.Getenv(env)
-	if val == "" {
-		return fallback
+	if v := os.Getenv(env); v != "" {
+		return v
 	}
-	return val
+	return fallback
 }
 
 func mustInitDB(dbURL string) *db.Client {
@@ -62,26 +61,24 @@ func tryInitCache(redisAddr string) *cache.Client {
 
 // defineServiceRoutes configura todas as rotas protegidas e injeta o DB e Cache.
 func defineServiceRoutes(router *mux.Router, dbClient *db.Client, cacheClient *cache.Client) {
-	// Inicializa os Serviços de Negócio (Injeção de Dependência)
 	userService := users.NewService(dbClient)
 	habitService := habits.NewService(dbClient)
 	gamificationService := gamification.NewService(dbClient, cacheClient)
 
-	// --- ROTAS DO SERVIÇO DE USUÁRIOS ---
+	// --- USUÁRIOS ---
 	router.HandleFunc("/user/profile", userService.HandleGetUserProfile).Methods("GET")
 	router.HandleFunc("/user/profile", userService.HandleUpdateProfile).Methods("PUT")
 	router.HandleFunc("/user/support-contact", userService.HandleAddSupportContact).Methods("POST")
 	router.HandleFunc("/user/support-contact", userService.HandleGetSupportContacts).Methods("GET")
 	router.HandleFunc("/user/support-contact/{contactId}", userService.HandleDeleteSupportContact).Methods("DELETE")
 
-	// --- ROTAS DO SERVIÇO DE HÁBITOS & METAS ---
+	// --- HÁBITOS ---
 	router.HandleFunc("/habits", habitService.HandleCreateHabit).Methods("POST")
 	router.HandleFunc("/habits", habitService.HandleGetHabits).Methods("GET")
-	// FIX: rota agora fornece {habitId} como o handler espera
 	router.HandleFunc("/habits/{habitId}/log", habitService.HandleLogHabit).Methods("POST")
 	router.HandleFunc("/habits/{habitId}/logs", habitService.HandleGetHabitLogs).Methods("GET")
 
-	// --- ROTAS DO SERVIÇO DE GAMIFICAÇÃO ---
+	// --- GAMIFICAÇÃO ---
 	router.HandleFunc("/mana/balance", gamificationService.HandleGetManaBalance).Methods("GET")
 	router.HandleFunc("/mana/redeem", gamificationService.HandleRedeemReward).Methods("POST")
 	router.HandleFunc("/challenges", gamificationService.HandleListChallenges).Methods("GET")
@@ -104,11 +101,16 @@ func setupRouter(dbClient *db.Client, cacheClient *cache.Client) *mux.Router {
 	apiRouter.Use(auth.JWTAuthMiddleware)
 	defineServiceRoutes(apiRouter, dbClient, cacheClient)
 
-	// Health endpoint
+	// Health
 	r.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	}).Methods("GET")
+
+	// (Opcional) Captura de preflight genérico
+	r.PathPrefix("/").Methods(http.MethodOptions).HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
 
 	return r
 }
@@ -127,21 +129,35 @@ func main() {
 
 	r := setupRouter(dbClient, cacheClient)
 
+	// CORS (Gorilla)
+	origins := []string{
+		"http://localhost:4200",
+		"https://seu-projeto.vercel.app",
+		"https://*.vercel.app",
+	}
+	corsHandler := handlers.CORS(
+		handlers.AllowedOrigins(origins),
+		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}),
+		handlers.AllowedHeaders([]string{"Authorization", "Content-Type"}),
+		handlers.AllowCredentials(), // remova se não precisar de cookies/credenciais
+		handlers.MaxAge(12*60*60),
+	)
+
 	srv := &http.Server{
-		Handler:      r,
+		Handler:      corsHandler(r), // aplica CORS no topo da cadeia
 		Addr:         addr,
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Canal para shutdown elegante
+	// Shutdown gracioso
 	idleConnsClosed := make(chan struct{})
 	go func() {
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt)
 		<-c
-		log.Println("🛑 Recebido sinal de interrupção, encerrando servidor...")
+		log.Println("🛑 Encerrando servidor...")
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {
@@ -150,11 +166,11 @@ func main() {
 		close(idleConnsClosed)
 	}()
 
-	log.Printf("🚀 Servidor Guardião da Saúde iniciado em http://localhost%s", addr)
+	log.Printf("🚀 Servidor Guardião da Saúde em http://localhost%s", addr)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("❌ Erro ao iniciar o servidor: %v", err)
 	}
 
 	<-idleConnsClosed
-	log.Println("Servidor encerrado com segurança.")
+	log.Println("✅ Servidor encerrado com segurança.")
 }
