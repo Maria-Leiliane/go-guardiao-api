@@ -12,9 +12,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
-
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/crypto/bcrypt"
 
 	"go-guardiao-api/internal/platforms/db"
 	"go-guardiao-api/pkg/models"
@@ -64,7 +63,7 @@ func GenerateToken(userID, email string, expiration time.Duration) (string, erro
 
 func GetUserIDFromContext(r *http.Request) (string, error) {
 	userID, ok := r.Context().Value(userIDKey).(string)
-	if !ok || userID == "" {
+	if !ok || strings.TrimSpace(userID) == "" {
 		return "", errors.New("user ID não encontrado no contexto")
 	}
 	return userID, nil
@@ -164,10 +163,11 @@ type AuthPayload struct {
 
 // ===== Handlers (com DB) =====
 
-// Registro: exige email + senha forte, salva hash e retorna token
+// Registro: exige email + senha forte, salva hash e retorna token.
+// Se o email já existir e NÃO tiver password_hash (usuário legado), define a senha e retorna sucesso.
 func HandleRegisterWithDB(w http.ResponseWriter, r *http.Request, dbClient *db.Client) {
 	var p AuthPayload
-	if err := json.NewDecoder(r.Body).Decode(&p); err != nil || p.Email == "" {
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil || strings.TrimSpace(p.Email) == "" {
 		errorJSON(w, http.StatusBadRequest, "Email é obrigatório.")
 		return
 	}
@@ -179,6 +179,7 @@ func HandleRegisterWithDB(w http.ResponseWriter, r *http.Request, dbClient *db.C
 	u, err := dbClient.GetUserByEmail(r.Context(), p.Email)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
+		// Novo usuário
 		hash, err := HashPassword(p.Password)
 		if err != nil {
 			errorJSON(w, http.StatusInternalServerError, "Falha ao processar senha")
@@ -194,12 +195,25 @@ func HandleRegisterWithDB(w http.ResponseWriter, r *http.Request, dbClient *db.C
 			errorJSON(w, http.StatusInternalServerError, "Falha ao criar usuário")
 			return
 		}
-		// buscar com ID preenchido
 		u, _ = dbClient.GetUserByEmail(r.Context(), p.Email)
 
 	case err == nil:
-		errorJSON(w, http.StatusConflict, "Email já cadastrado")
-		return
+		// Usuário já existe
+		if strings.TrimSpace(u.PasswordHash) == "" {
+			hash, err := HashPassword(p.Password)
+			if err != nil {
+				errorJSON(w, http.StatusInternalServerError, "Falha ao processar senha")
+				return
+			}
+			if err = dbClient.SetUserPassword(r.Context(), u.ID, hash); err != nil {
+				errorJSON(w, http.StatusInternalServerError, "Falha ao atualizar senha")
+				return
+			}
+			u, _ = dbClient.GetUserByEmail(r.Context(), p.Email)
+		} else {
+			errorJSON(w, http.StatusConflict, "Email já cadastrado")
+			return
+		}
 
 	default:
 		errorJSON(w, http.StatusInternalServerError, "Falha ao consultar usuário")
@@ -211,7 +225,6 @@ func HandleRegisterWithDB(w http.ResponseWriter, r *http.Request, dbClient *db.C
 		errorJSON(w, http.StatusInternalServerError, "Falha ao gerar token")
 		return
 	}
-
 	okJSON(w, http.StatusCreated, map[string]string{
 		"message": "Usuário registrado com sucesso",
 		"token":   token,
@@ -222,7 +235,7 @@ func HandleRegisterWithDB(w http.ResponseWriter, r *http.Request, dbClient *db.C
 // Login: exige email + senha, valida bcrypt e retorna token
 func HandleLoginWithDB(w http.ResponseWriter, r *http.Request, dbClient *db.Client) {
 	var p AuthPayload
-	if err := json.NewDecoder(r.Body).Decode(&p); err != nil || p.Email == "" || p.Password == "" {
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil || strings.TrimSpace(p.Email) == "" || strings.TrimSpace(p.Password) == "" {
 		errorJSON(w, http.StatusBadRequest, "Email e senha são obrigatórios.")
 		return
 	}
@@ -237,6 +250,11 @@ func HandleLoginWithDB(w http.ResponseWriter, r *http.Request, dbClient *db.Clie
 		return
 	}
 
+	if strings.TrimSpace(u.PasswordHash) == "" {
+		errorJSON(w, http.StatusUnauthorized, "Conta sem senha definida. Registre-se para definir a senha.")
+		return
+	}
+
 	if err := CheckPassword(p.Password, u.PasswordHash); err != nil {
 		errorJSON(w, http.StatusUnauthorized, "Senha inválida")
 		return
@@ -247,7 +265,6 @@ func HandleLoginWithDB(w http.ResponseWriter, r *http.Request, dbClient *db.Clie
 		errorJSON(w, http.StatusInternalServerError, "Falha ao gerar token")
 		return
 	}
-
 	okJSON(w, http.StatusOK, map[string]string{
 		"message": "Login realizado com sucesso",
 		"token":   token,

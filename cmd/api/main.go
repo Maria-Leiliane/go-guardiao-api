@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go-guardiao-api/internal/auth"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +14,7 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 
+	"go-guardiao-api/internal/auth"
 	"go-guardiao-api/internal/gamification"
 	"go-guardiao-api/internal/habits"
 	"go-guardiao-api/internal/platforms/cache"
@@ -108,8 +108,8 @@ func setupRouter(dbClient *db.Client, cacheClient *cache.Client) *mux.Router {
 		_, _ = w.Write([]byte("ok"))
 	}).Methods("GET")
 
-	// Captura de preflight genérico
-	r.PathPrefix("/").Methods(http.MethodOptions).HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Preflight genérico
+	r.PathPrefix("/").Methods(http.MethodOptions).HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
@@ -130,35 +130,28 @@ func main() {
 
 	r := setupRouter(dbClient, cacheClient)
 
-	// CORS (Gorilla)
-	origins := []string{
-		"http://localhost:4200",
-		"https://guardiao-frontend.vercel.app",
-		"https://*.vercel.app",
-	}
-
+	// CORS compatível com Vercel (produção e previews)
 	corsHandler := handlers.CORS(
-		handlers.AllowedOrigins(origins),
-		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}),
-		handlers.AllowedHeaders([]string{"Authorization", "Content-Type"}),
-		handlers.AllowCredentials(), // cookies/credenciais
-		handlers.MaxAge(12*60*60),
 		handlers.AllowedOriginValidator(func(origin string) bool {
 			if origin == "http://localhost:4200" {
 				return true
 			}
 			if origin == "https://guardiao-frontend.vercel.app" {
 				return true
-			} // front domínio
+			}
+			// aceita qualquer preview *.vercel.app
 			if strings.HasPrefix(origin, "https://") && strings.HasSuffix(origin, ".vercel.app") {
 				return true
-			} // previews
+			}
 			return false
 		}),
+		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}),
+		handlers.AllowedHeaders([]string{"Authorization", "Content-Type", "X-Requested-With"}),
+		handlers.MaxAge(12*60*60),
 	)
 
 	srv := &http.Server{
-		Handler:      corsHandler(r), // aplica CORS no topo da cadeia
+		Handler:      corsHandler(r),
 		Addr:         addr,
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,

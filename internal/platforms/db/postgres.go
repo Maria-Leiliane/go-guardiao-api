@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"go-guardiao-api/pkg/models"
@@ -59,7 +60,7 @@ func (c *Client) Close() {
 	}
 }
 
-// ensureColumn adiciona uma coluna se ela não existir (evita problemas de sintaxe/compat)
+// ensureColumn adiciona uma coluna se ela não existir (compatível com Neon/Postgres)
 func ensureColumn(ctx context.Context, tx pgx.Tx, table, column, definition string) error {
 	var exists bool
 	const q = `
@@ -93,7 +94,7 @@ func (c *Client) InitSchema(ctx context.Context) error {
 		}
 	}()
 
-	// Tabelas principais
+	// Tabela users
 	if _, err = tx.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS users (
 			id UUID PRIMARY KEY,
@@ -104,17 +105,17 @@ func (c *Client) InitSchema(ctx context.Context) error {
 		);`); err != nil {
 		return fmt.Errorf("falha ao criar tabela users: %w", err)
 	}
-
-	// Adiciona password_hash (varchar 72) apenas se não existir
+	// Coluna de senha (bcrypt ~60 chars; usamos VARCHAR(72))
 	if err = ensureColumn(ctx, tx, "users", "password_hash", "VARCHAR(72)"); err != nil {
 		return err
 	}
-
+	// Índice único (idempotente)
 	if _, err = tx.Exec(ctx, `
 		CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique_idx ON users (email);`); err != nil {
 		return fmt.Errorf("falha ao criar índice de email: %w", err)
 	}
 
+	// Demais tabelas
 	if _, err = tx.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS user_mana (
 			user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -123,7 +124,6 @@ func (c *Client) InitSchema(ctx context.Context) error {
 		);`); err != nil {
 		return fmt.Errorf("falha ao criar tabela user_mana: %w", err)
 	}
-
 	if _, err = tx.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS mana_transactions (
 			id SERIAL PRIMARY KEY,
@@ -135,7 +135,6 @@ func (c *Client) InitSchema(ctx context.Context) error {
 		);`); err != nil {
 		return fmt.Errorf("falha ao criar tabela mana_transactions: %w", err)
 	}
-
 	if _, err = tx.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS support_contacts (
 			contact_id UUID PRIMARY KEY,
@@ -147,7 +146,6 @@ func (c *Client) InitSchema(ctx context.Context) error {
 		);`); err != nil {
 		return fmt.Errorf("falha ao criar tabela support_contacts: %w", err)
 	}
-
 	if _, err = tx.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS habits (
 			id UUID PRIMARY KEY,
@@ -159,7 +157,6 @@ func (c *Client) InitSchema(ctx context.Context) error {
 		);`); err != nil {
 		return fmt.Errorf("falha ao criar tabela habits: %w", err)
 	}
-
 	if _, err = tx.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS habit_logs (
 			id SERIAL PRIMARY KEY,
@@ -184,10 +181,10 @@ func (c *Client) CreateUser(ctx context.Context, user models.User) error {
 			_ = tx.Rollback(ctx)
 		}
 	}()
-	if user.ID == "" {
+	if strings.TrimSpace(user.ID) == "" {
 		user.ID = uuid.New().String()
 	}
-	// Inclui password_hash no insert (bcrypt ~60 chars; usamos VARCHAR(72))
+	// Inclui password_hash no insert
 	const sqlUser = `INSERT INTO users (id, email, name, theme, password_hash) VALUES ($1, $2, $3, $4, $5)`
 	if _, err = tx.Exec(ctx, sqlUser, user.ID, user.Email, user.Name, user.Theme, user.PasswordHash); err != nil {
 		return fmt.Errorf("falha ao inserir usuário: %w", err)
@@ -209,7 +206,7 @@ func (c *Client) GetUserByID(ctx context.Context, userID string) (models.User, e
 	return user, nil
 }
 
-// Novo: busca usuário por email (inclui password_hash) — necessário para login
+// Busca usuário por email (inclui password_hash) — necessário para login/registro
 func (c *Client) GetUserByEmail(ctx context.Context, email string) (models.User, error) {
 	u := models.User{}
 	sql := `SELECT id, email, name, theme, password_hash FROM users WHERE email = $1 LIMIT 1`
@@ -218,6 +215,19 @@ func (c *Client) GetUserByEmail(ctx context.Context, email string) (models.User,
 		return models.User{}, err
 	}
 	return u, nil
+}
+
+// Define/atualiza senha (hash) para usuário existente
+func (c *Client) SetUserPassword(ctx context.Context, userID, hash string) error {
+	const q = `UPDATE users SET password_hash = $2 WHERE id = $1`
+	cmdTag, err := c.pool.Exec(ctx, q, userID, hash)
+	if err != nil {
+		return fmt.Errorf("falha ao atualizar senha: %w", err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return errors.New("usuário não encontrado para atualização de senha")
+	}
+	return nil
 }
 
 func (c *Client) UpdateUser(ctx context.Context, user models.User) error {
@@ -234,7 +244,7 @@ func (c *Client) UpdateUser(ctx context.Context, user models.User) error {
 
 func (c *Client) CreateSupportContact(ctx context.Context, contact models.SupportContact) error {
 	sql := `INSERT INTO support_contacts (contact_id, user_id, contact_email, nickname, notification_preference) VALUES ($1, $2, $3, $4, $5)`
-	if contact.ContactID == "" {
+	if strings.TrimSpace(contact.ContactID) == "" {
 		contact.ContactID = uuid.New().String()
 	}
 	_, err := c.pool.Exec(ctx, sql, contact.ContactID, contact.UserID, contact.ContactEmail, contact.Nickname, contact.NotificationPreference)
@@ -273,7 +283,7 @@ func (c *Client) DeleteSupportContact(ctx context.Context, contactID string) err
 }
 
 func (c *Client) CreateHabit(ctx context.Context, habit models.Habit) (string, error) {
-	if habit.ID == "" {
+	if strings.TrimSpace(habit.ID) == "" {
 		habit.ID = uuid.New().String()
 	}
 	sql := `INSERT INTO habits (id, user_id, name, goal_type, frequency) VALUES ($1, $2, $3, $4, $5)`
