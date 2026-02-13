@@ -1,0 +1,49 @@
+<div class="leaderboard-container">
+  <h1>Placar de Líderes</h1>
+
+  <div class="loading" *ngIf="isLoading">
+    <p>Carregando placar...</p>
+  </div>
+
+  <app-card *ngIf="!isLoading">
+    <div class="user-rank" *ngIf="userRank">
+      <p>Sua Posição: <strong>#{{ userRank }}</strong></p>
+    </div>
+
+    <div class="leaderboard-table">
+      <div class="table-header">
+        <div class="col-rank">Posição</div>
+        <div class="col-name">Usuário</div>
+        <div class="col-level">Nível</div>
+        <div class="col-mana">Mana</div>
+      </div>
+
+      <div class="table-body">
+        <div 
+          class="table-row" 
+          *ngFor="let entry of entries"
+          [class.highlight]="entry.rank === userRank">
+          <div class="col-rank" [ngClass]="getRankClass(entry.rank)">
+            <span class="rank-icon" *ngIf="entry.rank <= 3">{{ getRankIcon(entry.rank) }}</span>
+            <span class="rank-number">{{ entry.rank }}</span>
+          </div>
+          <div class="col-name">
+            <div class="user-info">
+              <span class="user-name">{{ entry.userName }}</span>
+            </div>
+          </div>
+          <div class="col-level">
+            <span class="level-badge">Nv. {{ entry.level }}</span>
+          </div>
+          <div class="col-mana">
+            <span class="mana-value">⚡ {{ entry.mana }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="empty-state" *ngIf="entries.length === 0">
+      <p>Nenhum dado disponível no momento.</p>
+    </div>
+  </app-card>
+</div>

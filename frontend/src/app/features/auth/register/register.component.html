@@ -1,0 +1,84 @@
+<div class="auth-container">
+  <div class="auth-card">
+    <div class="auth-header">
+      <h1>🛡️ Go Guardião</h1>
+      <p>Comece sua jornada!</p>
+    </div>
+
+    <form [formGroup]="registerForm" (ngSubmit)="onSubmit()" class="auth-form">
+      <div class="form-group">
+        <label for="name">Nome</label>
+        <input 
+          type="text" 
+          id="name" 
+          formControlName="name"
+          placeholder="Seu nome completo"
+          [class.error]="name?.invalid && name?.touched">
+        <div class="error-message" *ngIf="name?.invalid && name?.touched">
+          <span *ngIf="name?.errors?.['required']">Nome é obrigatório</span>
+          <span *ngIf="name?.errors?.['minlength']">Nome deve ter no mínimo 3 caracteres</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input 
+          type="email" 
+          id="email" 
+          formControlName="email"
+          placeholder="seu@email.com"
+          [class.error]="email?.invalid && email?.touched">
+        <div class="error-message" *ngIf="email?.invalid && email?.touched">
+          <span *ngIf="email?.errors?.['required']">Email é obrigatório</span>
+          <span *ngIf="email?.errors?.['email']">Email inválido</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Senha</label>
+        <input 
+          type="password" 
+          id="password" 
+          formControlName="password"
+          placeholder="Mínimo 6 caracteres"
+          [class.error]="password?.invalid && password?.touched">
+        <div class="error-message" *ngIf="password?.invalid && password?.touched">
+          <span *ngIf="password?.errors?.['required']">Senha é obrigatória</span>
+          <span *ngIf="password?.errors?.['minlength']">Senha deve ter no mínimo 6 caracteres</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="confirmPassword">Confirmar Senha</label>
+        <input 
+          type="password" 
+          id="confirmPassword" 
+          formControlName="confirmPassword"
+          placeholder="Digite a senha novamente"
+          [class.error]="(confirmPassword?.invalid && confirmPassword?.touched) || (registerForm.errors?.['passwordMismatch'] && confirmPassword?.touched)">
+        <div class="error-message" *ngIf="confirmPassword?.invalid && confirmPassword?.touched">
+          <span *ngIf="confirmPassword?.errors?.['required']">Confirmação de senha é obrigatória</span>
+        </div>
+        <div class="error-message" *ngIf="registerForm.errors?.['passwordMismatch'] && confirmPassword?.touched">
+          <span>As senhas não coincidem</span>
+        </div>
+      </div>
+
+      <div class="error-message" *ngIf="errorMessage">
+        {{ errorMessage }}
+      </div>
+
+      <app-button 
+        type="submit" 
+        variant="primary" 
+        size="large"
+        [disabled]="registerForm.invalid || isLoading">
+        {{ isLoading ? 'Criando conta...' : 'Criar Conta' }}
+      </app-button>
+    </form>
+
+    <div class="auth-footer">
+      <p>Já tem uma conta? <a routerLink="/auth/login">Faça login</a></p>
+    </div>
+  </div>
+</div>

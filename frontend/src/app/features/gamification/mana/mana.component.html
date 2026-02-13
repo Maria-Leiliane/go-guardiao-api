@@ -1,0 +1,94 @@
+<div class="mana-container">
+  <h1>Seu Mana</h1>
+
+  <div class="loading" *ngIf="isLoading">
+    <p>Carregando...</p>
+  </div>
+
+  <div class="mana-content" *ngIf="!isLoading">
+    <app-card title="Progresso de Mana">
+      <div class="mana-display">
+        <div class="level-badge">
+          <span class="level-number">{{ manaInfo.level }}</span>
+          <span class="level-label">Nível</span>
+        </div>
+
+        <div class="mana-progress">
+          <div class="progress-circle">
+            <svg viewBox="0 0 200 200">
+              <circle 
+                class="progress-bg" 
+                cx="100" 
+                cy="100" 
+                r="90" 
+                fill="none" 
+                stroke="#E0E0E0" 
+                stroke-width="20"/>
+              <circle 
+                class="progress-fill" 
+                cx="100" 
+                cy="100" 
+                r="90" 
+                fill="none" 
+                stroke="url(#gradient)" 
+                stroke-width="20"
+                [style.stroke-dasharray]="565"
+                [style.stroke-dashoffset]="565 - (565 * manaInfo.percentage / 100)"/>
+              <defs>
+                <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#4CAF50;stop-opacity:1" />
+                  <stop offset="100%" style="stop-color:#FFC107;stop-opacity:1" />
+                </linearGradient>
+              </defs>
+            </svg>
+            <div class="progress-text">
+              <div class="current-mana">{{ manaInfo.current }}</div>
+              <div class="mana-label">Mana</div>
+            </div>
+          </div>
+
+          <div class="mana-stats">
+            <div class="stat">
+              <span class="stat-label">Próximo Nível</span>
+              <span class="stat-value">{{ manaInfo.nextLevel }} Mana</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Faltam</span>
+              <span class="stat-value">{{ manaInfo.nextLevel - manaInfo.current }} Mana</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Progresso</span>
+              <span class="stat-value">{{ manaInfo.percentage.toFixed(1) }}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </app-card>
+
+    <app-card title="Como Ganhar Mana">
+      <div class="tips-list">
+        <div class="tip-item">
+          <span class="tip-icon">✅</span>
+          <div class="tip-content">
+            <h4>Complete Hábitos Diários</h4>
+            <p>Ganhe Mana toda vez que completar um hábito</p>
+          </div>
+        </div>
+        <div class="tip-item">
+          <span class="tip-icon">🎯</span>
+          <div class="tip-content">
+            <h4>Participe de Desafios</h4>
+            <p>Desafios oferecem recompensas maiores de Mana</p>
+          </div>
+        </div>
+        <div class="tip-item">
+          <span class="tip-icon">🔥</span>
+          <div class="tip-content">
+            <h4>Mantenha sua Sequência</h4>
+            <p>Sequências longas podem dar bônus de Mana</p>
+          </div>
+        </div>
+      </div>
+    </app-card>
+  </div>
+</div>

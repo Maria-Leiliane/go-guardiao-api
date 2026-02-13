@@ -1,0 +1,71 @@
+<div class="habits-container">
+  <div class="habits-header">
+    <h1>Meus Hábitos</h1>
+    <app-button variant="primary" (clicked)="createHabit()">
+      + Novo Hábito
+    </app-button>
+  </div>
+
+  <div class="loading" *ngIf="isLoading">
+    <p>Carregando hábitos...</p>
+  </div>
+
+  <div class="habits-grid" *ngIf="!isLoading && habits.length > 0">
+    <app-card *ngFor="let habit of habits" class="habit-card">
+      <div class="habit-content">
+        <div class="habit-header">
+          <h3>{{ habit.name }}</h3>
+          <span class="frequency-badge">{{ habit.frequency }}</span>
+        </div>
+        <p class="habit-description">{{ habit.description }}</p>
+        <div class="habit-stats">
+          <div class="stat">
+            <span class="label">Sequência:</span>
+            <span class="value">{{ habit.streak }} dias</span>
+          </div>
+          <div class="stat">
+            <span class="label">Conclusões:</span>
+            <span class="value">{{ habit.completionCount }}</span>
+          </div>
+        </div>
+      </div>
+      <div card-footer class="habit-actions">
+        <app-button 
+          variant="success" 
+          size="small"
+          [disabled]="habit.completed"
+          (clicked)="onComplete(habit.id)">
+          {{ habit.completed ? '✓ Completo' : 'Completar' }}
+        </app-button>
+        <app-button variant="secondary" size="small" (clicked)="viewDetail(habit.id)">
+          Ver Detalhes
+        </app-button>
+        <app-button variant="danger" size="small" (clicked)="onDelete(habit.id)">
+          Excluir
+        </app-button>
+      </div>
+    </app-card>
+  </div>
+
+  <div class="empty-state" *ngIf="!isLoading && habits.length === 0">
+    <p>Você ainda não tem hábitos cadastrados.</p>
+    <app-button variant="primary" (clicked)="createHabit()">
+      Criar Primeiro Hábito
+    </app-button>
+  </div>
+</div>
+
+<app-modal 
+  [isOpen]="deleteModalOpen" 
+  title="Confirmar Exclusão"
+  (close)="cancelDelete()">
+  <p>Tem certeza que deseja excluir este hábito? Esta ação não pode ser desfeita.</p>
+  <div modal-footer>
+    <app-button variant="secondary" (clicked)="cancelDelete()">
+      Cancelar
+    </app-button>
+    <app-button variant="danger" (clicked)="confirmDelete()">
+      Excluir
+    </app-button>
+  </div>
+</app-modal>

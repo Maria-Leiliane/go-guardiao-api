@@ -1,0 +1,126 @@
+.profile-container {
+  padding: var(--spacing-xl) 0;
+}
+
+h1 {
+  margin-bottom: var(--spacing-xl);
+}
+
+.profile-content {
+  display: grid;
+  gap: var(--spacing-lg);
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+}
+
+.profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.info-item {
+  display: flex;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--background);
+  border-radius: var(--radius-sm);
+  
+  .label {
+    font-weight: 600;
+    color: var(--text-secondary);
+    min-width: 100px;
+  }
+  
+  .value {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+}
+
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  
+  label {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  
+  input {
+    width: 100%;
+    padding: var(--spacing-md);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    
+    &:focus {
+      border-color: var(--primary-color);
+    }
+  }
+}
+
+.success-message {
+  color: var(--success-color);
+  padding: var(--spacing-md);
+  background: rgba(76, 175, 80, 0.1);
+  border-radius: var(--radius-sm);
+}
+
+.error-message {
+  color: var(--danger-color);
+  padding: var(--spacing-md);
+  background: rgba(244, 67, 54, 0.1);
+  border-radius: var(--radius-sm);
+}
+
+.form-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  justify-content: flex-end;
+}
+
+.support-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.support-item {
+  padding: var(--spacing-lg);
+  background: var(--background);
+  border-radius: var(--radius-md);
+  
+  h4 {
+    margin: 0 0 var(--spacing-sm) 0;
+    color: var(--text-primary);
+  }
+  
+  .phone {
+    margin: var(--spacing-sm) 0;
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+  
+  .link {
+    display: inline-flex;
+    align-items: center;
+    color: var(--primary-color);
+    font-weight: 600;
+    
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .profile-content {
+    grid-template-columns: 1fr;
+  }
+}

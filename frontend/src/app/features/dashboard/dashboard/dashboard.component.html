@@ -1,0 +1,103 @@
+<div class="dashboard-container">
+  <div class="dashboard-header">
+    <h1>Bem-vindo, {{ currentUser?.name }}!</h1>
+    <p>Continue sua jornada de hábitos saudáveis</p>
+  </div>
+
+  <div class="loading" *ngIf="isLoading">
+    <p>Carregando...</p>
+  </div>
+
+  <div class="dashboard-content" *ngIf="!isLoading">
+    <!-- Mana Card -->
+    <app-card title="Seu Mana" class="mana-card">
+      <div class="mana-info">
+        <div class="mana-level">
+          <span class="level-badge">Nível {{ manaInfo.level || currentUser?.level || 1 }}</span>
+        </div>
+        <div class="mana-progress">
+          <div class="progress-bar">
+            <div class="progress-fill" [style.width.%]="getManaPercentage()"></div>
+          </div>
+          <div class="mana-text">
+            <span class="current">{{ manaInfo.current || currentUser?.mana || 0 }} Mana</span>
+            <span class="next">Próximo nível: {{ manaInfo.nextLevel || 100 }}</span>
+          </div>
+        </div>
+      </div>
+    </app-card>
+
+    <!-- Today's Habits -->
+    <app-card title="Hábitos de Hoje" subtitle="Complete seus hábitos diários">
+      <div class="habits-list" *ngIf="todayHabits.length > 0">
+        <div class="habit-item" *ngFor="let habit of todayHabits">
+          <div class="habit-checkbox">
+            <input 
+              type="checkbox" 
+              [id]="'habit-' + habit.id"
+              [checked]="habit.completed"
+              (change)="onHabitComplete(habit.id)">
+            <label [for]="'habit-' + habit.id">{{ habit.name }}</label>
+          </div>
+          <div class="habit-status" *ngIf="habit.completed">
+            <span class="badge badge-success">✓ Completo</span>
+          </div>
+        </div>
+      </div>
+      <div class="empty-state" *ngIf="todayHabits.length === 0">
+        <p>Nenhum hábito para hoje</p>
+        <a routerLink="/habits" class="link">Criar hábito</a>
+      </div>
+    </app-card>
+
+    <!-- Active Challenges -->
+    <app-card title="Desafios Ativos" subtitle="Participe e ganhe recompensas">
+      <div class="challenges-list" *ngIf="activeChallenges.length > 0">
+        <div class="challenge-item" *ngFor="let challenge of activeChallenges">
+          <div class="challenge-header">
+            <h4>{{ challenge.title }}</h4>
+            <span class="reward">+{{ challenge.reward }} Mana</span>
+          </div>
+          <p class="challenge-description">{{ challenge.description }}</p>
+          <div class="challenge-progress">
+            <div class="progress-bar">
+              <div 
+                class="progress-fill" 
+                [style.width.%]="(challenge.progress / challenge.targetProgress) * 100">
+              </div>
+            </div>
+            <span class="progress-text">
+              {{ challenge.progress }}/{{ challenge.targetProgress }}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="empty-state" *ngIf="activeChallenges.length === 0">
+        <p>Nenhum desafio ativo</p>
+        <a routerLink="/gamification/challenges" class="link">Ver desafios</a>
+      </div>
+    </app-card>
+
+    <!-- Quick Stats -->
+    <app-card title="Estatísticas Rápidas">
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-value">{{ currentUser?.level || 1 }}</div>
+          <div class="stat-label">Nível</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">{{ currentUser?.mana || 0 }}</div>
+          <div class="stat-label">Mana Total</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">{{ todayHabits.length }}</div>
+          <div class="stat-label">Hábitos Hoje</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">{{ activeChallenges.length }}</div>
+          <div class="stat-label">Desafios</div>
+        </div>
+      </div>
+    </app-card>
+  </div>
+</div>

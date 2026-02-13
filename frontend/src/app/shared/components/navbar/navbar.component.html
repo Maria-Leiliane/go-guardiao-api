@@ -1,0 +1,44 @@
+<nav class="navbar">
+  <div class="navbar-container">
+    <div class="navbar-brand">
+      <h2>🛡️ Go Guardião</h2>
+    </div>
+
+    <button class="navbar-toggle" (click)="toggleMenu()">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+
+    <div class="navbar-menu" [class.is-active]="isMenuOpen">
+      <div class="navbar-links">
+        <a routerLink="/dashboard" routerLinkActive="active" class="navbar-link">
+          <span class="icon">📊</span>
+          <span>Dashboard</span>
+        </a>
+        <a routerLink="/habits" routerLinkActive="active" class="navbar-link">
+          <span class="icon">✅</span>
+          <span>Hábitos</span>
+        </a>
+        <a routerLink="/gamification" routerLinkActive="active" class="navbar-link">
+          <span class="icon">🏆</span>
+          <span>Gamificação</span>
+        </a>
+        <a routerLink="/profile" routerLinkActive="active" class="navbar-link">
+          <span class="icon">👤</span>
+          <span>Perfil</span>
+        </a>
+      </div>
+
+      <div class="navbar-user" *ngIf="currentUser">
+        <div class="user-info">
+          <span class="user-name">{{ currentUser.name }}</span>
+          <span class="user-mana">⚡ {{ currentUser.mana }} Mana</span>
+        </div>
+        <button class="btn-logout" (click)="logout()">
+          Sair
+        </button>
+      </div>
+    </div>
+  </div>
+</nav>

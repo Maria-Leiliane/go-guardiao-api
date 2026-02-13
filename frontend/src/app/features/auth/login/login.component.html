@@ -1,0 +1,54 @@
+<div class="auth-container">
+  <div class="auth-card">
+    <div class="auth-header">
+      <h1>🛡️ Go Guardião</h1>
+      <p>Bem-vindo de volta!</p>
+    </div>
+
+    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="auth-form">
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input 
+          type="email" 
+          id="email" 
+          formControlName="email"
+          placeholder="seu@email.com"
+          [class.error]="email?.invalid && email?.touched">
+        <div class="error-message" *ngIf="email?.invalid && email?.touched">
+          <span *ngIf="email?.errors?.['required']">Email é obrigatório</span>
+          <span *ngIf="email?.errors?.['email']">Email inválido</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Senha</label>
+        <input 
+          type="password" 
+          id="password" 
+          formControlName="password"
+          placeholder="******"
+          [class.error]="password?.invalid && password?.touched">
+        <div class="error-message" *ngIf="password?.invalid && password?.touched">
+          <span *ngIf="password?.errors?.['required']">Senha é obrigatória</span>
+          <span *ngIf="password?.errors?.['minlength']">Senha deve ter no mínimo 6 caracteres</span>
+        </div>
+      </div>
+
+      <div class="error-message" *ngIf="errorMessage">
+        {{ errorMessage }}
+      </div>
+
+      <app-button 
+        type="submit" 
+        variant="primary" 
+        size="large"
+        [disabled]="loginForm.invalid || isLoading">
+        {{ isLoading ? 'Entrando...' : 'Entrar' }}
+      </app-button>
+    </form>
+
+    <div class="auth-footer">
+      <p>Não tem uma conta? <a routerLink="/auth/register">Registre-se</a></p>
+    </div>
+  </div>
+</div>
