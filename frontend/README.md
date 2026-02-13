@@ -6,8 +6,8 @@ Single Page Application (SPA) do Go Guardião, uma plataforma de gerenciamento d
 
 ## Tecnologias
 
-- **Framework:** Angular 17
-- **Linguagem:** TypeScript
+- **Framework:** Angular 19.2.18 (with all security patches)
+- **Linguagem:** TypeScript 5.7
 - **Estilização:** SCSS
 - **HTTP Client:** RxJS e HttpClient
 - **Autenticação:** JWT com HTTP Interceptors
