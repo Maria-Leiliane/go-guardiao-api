@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5"
 
 	"go-guardiao-api/internal/auth"
@@ -194,13 +195,30 @@ func (s *Service) HandleAddSupportContact(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var contact models.SupportContact
-	if err := json.NewDecoder(r.Body).Decode(&contact); err != nil {
+	var payload struct {
+		Name     string `json:"name"`     // obrigatório
+		Phone    string `json:"phone"`    // opcional
+		Email    string `json:"email"`    // opcional (caso queira notificar por email)
+		Relation string `json:"relation"` // opcional (ex.: mãe, amiga, médico)
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeError(w, http.StatusBadRequest, "Requisição inválida.")
 		return
 	}
+	if strings.TrimSpace(payload.Name) == "" {
+		writeError(w, http.StatusBadRequest, "Nome é obrigatório.")
+		return
+	}
 
-	contact.UserID = userID
+	contact := models.SupportContact{
+		UserID:                 userID,
+		ContactEmail:           strings.TrimSpace(payload.Email),
+		Phone:                  strings.TrimSpace(payload.Phone),
+		Nickname:               strings.TrimSpace(payload.Name),
+		NotificationPreference: strings.TrimSpace(payload.Relation),
+		Name:                   strings.TrimSpace(payload.Name),
+	}
+
 	if err := s.DBClient.CreateSupportContact(r.Context(), contact); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Falha ao adicionar contato: %v", err))
 		return
@@ -212,7 +230,7 @@ func (s *Service) HandleAddSupportContact(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// GET /user/support-contact
+// GET /user/support-contact — (id, name, phone, relation)
 func (s *Service) HandleGetSupportContacts(w http.ResponseWriter, r *http.Request) {
 	userID, err := auth.GetUserIDFromContext(r)
 	if err != nil {
@@ -226,12 +244,59 @@ func (s *Service) HandleGetSupportContacts(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeJSON(w, http.StatusOK, contacts)
+	type Out struct {
+		ID       string `json:"id"`
+		Name     string `json:"name"`
+		Phone    string `json:"phone,omitempty"`
+		Relation string `json:"relation,omitempty"`
+	}
+	out := make([]Out, 0, len(contacts))
+	for _, c := range contacts {
+		out = append(out, Out{
+			ID:       c.ContactID,
+			Name:     firstNonEmpty(c.Nickname, c.Name),
+			Phone:    c.Phone,
+			Relation: c.NotificationPreference,
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func firstNonEmpty(a, b string) string {
+	if strings.TrimSpace(a) != "" {
+		return a
+	}
+	if strings.TrimSpace(b) != "" {
+		return b
+	}
+	return ""
 }
 
 // DELETE /user/support-contact/{contactId}
 func (s *Service) HandleDeleteSupportContact(w http.ResponseWriter, r *http.Request) {
-	// Este handler pode usar mux.Vars(r) se a rota estiver registrada com Gorilla Mux.
-	// Para manter genérico, você pode adaptar para seu router ou manter como está no seu setup.
-	writeError(w, http.StatusNotImplemented, "Remoção de contato não implementada neste handler.")
+	userID, err := auth.GetUserIDFromContext(r)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "Acesso negado: UserID ausente.")
+		return
+	}
+
+	vars := mux.Vars(r)
+	contactID := strings.TrimSpace(vars["contactId"])
+	if contactID == "" {
+		writeError(w, http.StatusBadRequest, "contactId é obrigatório.")
+		return
+	}
+
+	// Segurança: garante que o contato pertence ao usuário logado
+	if err := s.DBClient.DeleteSupportContactByUser(r.Context(), userID, contactID); err != nil {
+		// quando não encontrado, retorne 404
+		if strings.Contains(strings.ToLower(err.Error()), "não encontrado") || strings.Contains(strings.ToLower(err.Error()), "no rows") {
+			writeError(w, http.StatusNotFound, "Contato não encontrado.")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Falha ao remover contato: %v", err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Contato removido."})
 }

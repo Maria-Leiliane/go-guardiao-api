@@ -74,6 +74,7 @@ func defineServiceRoutes(router *mux.Router, dbClient *db.Client, cacheClient *c
 	router.HandleFunc("/user/support-contact", userService.HandleAddSupportContact).Methods("POST")
 	router.HandleFunc("/user/support-contact", userService.HandleGetSupportContacts).Methods("GET")
 	router.HandleFunc("/user/support-contact/{contactId}", userService.HandleDeleteSupportContact).Methods("DELETE")
+	
 	// --- HÁBITOS ---
 	router.HandleFunc("/habits", habitService.HandleCreateHabit).Methods("POST")
 	router.HandleFunc("/habits", habitService.HandleGetHabits).Methods("GET")

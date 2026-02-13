@@ -134,6 +134,8 @@ func (c *Client) InitSchema(ctx context.Context) error {
 		);`); err != nil {
 		return fmt.Errorf("falha ao criar tabela mana_transactions: %w", err)
 	}
+
+	// Tabela support_contacts
 	if _, err = tx.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS support_contacts (
 			contact_id UUID PRIMARY KEY,
@@ -145,6 +147,11 @@ func (c *Client) InitSchema(ctx context.Context) error {
 		);`); err != nil {
 		return fmt.Errorf("falha ao criar tabela support_contacts: %w", err)
 	}
+	// garante coluna phone (idempotente)
+	if err = ensureColumn(ctx, tx, "support_contacts", "phone", "VARCHAR(30)"); err != nil {
+		return err
+	}
+
 	if _, err = tx.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS habits (
 			id UUID PRIMARY KEY,
@@ -185,7 +192,7 @@ func (c *Client) CreateUser(ctx context.Context, user models.User) error {
 	}
 	// Inclui password_hash no insert
 	const sqlUser = `INSERT INTO users (id, email, name, theme, password_hash) VALUES ($1, $2, $3, $4, $5)`
-	if _, err = tx.Exec(ctx, sqlUser, user.ID, user.Email, user.Name, user.Theme, user.PasswordHash); err != nil {
+	if _, err = tx.Exec(ctx, sqlUser, strings.ToLower(strings.TrimSpace(user.ID)), strings.ToLower(strings.TrimSpace(user.Email)), strings.TrimSpace(user.Name), strings.TrimSpace(user.Theme), user.PasswordHash); err != nil {
 		return fmt.Errorf("falha ao inserir usuário: %w", err)
 	}
 	const sqlMana = `INSERT INTO user_mana (user_id, balance) VALUES ($1, 0)`
@@ -208,8 +215,9 @@ func (c *Client) GetUserByID(ctx context.Context, userID string) (models.User, e
 // Busca usuário por email (inclui password_hash) — necessário para login/registro
 func (c *Client) GetUserByEmail(ctx context.Context, email string) (models.User, error) {
 	u := models.User{}
-	sql := `SELECT id, email, name, theme, password_hash FROM users WHERE email = $1 LIMIT 1`
-	err := c.pool.QueryRow(ctx, sql, email).Scan(&u.ID, &u.Email, &u.Name, &u.Theme, &u.PasswordHash)
+	// Case-insensitive
+	sql := `SELECT id, email, name, theme, password_hash FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`
+	err := c.pool.QueryRow(ctx, sql, strings.TrimSpace(email)).Scan(&u.ID, &u.Email, &u.Name, &u.Theme, &u.PasswordHash)
 	if err != nil {
 		return models.User{}, err
 	}
@@ -243,7 +251,7 @@ func (c *Client) SetUserPassword(ctx context.Context, userID, hash string) error
 // Atualiza nome e tema do usuário
 func (c *Client) UpdateUser(ctx context.Context, user models.User) error {
 	sql := `UPDATE users SET name = $2, theme = $3 WHERE id = $1`
-	cmdTag, err := c.pool.Exec(ctx, sql, user.ID, user.Name, user.Theme)
+	cmdTag, err := c.pool.Exec(ctx, sql, user.ID, strings.TrimSpace(user.Name), strings.TrimSpace(user.Theme))
 	if err != nil {
 		return err
 	}
@@ -256,7 +264,7 @@ func (c *Client) UpdateUser(ctx context.Context, user models.User) error {
 // Atualiza e-mail do usuário (deve existir índice único para evitar duplicidade)
 func (c *Client) UpdateUserEmail(ctx context.Context, userID, email string) error {
 	const q = `UPDATE users SET email = $2 WHERE id = $1`
-	cmdTag, err := c.pool.Exec(ctx, q, userID, email)
+	cmdTag, err := c.pool.Exec(ctx, q, userID, strings.ToLower(strings.TrimSpace(email)))
 	if err != nil {
 		return fmt.Errorf("falha ao atualizar e-mail: %w", err)
 	}
@@ -267,16 +275,26 @@ func (c *Client) UpdateUserEmail(ctx context.Context, userID, email string) erro
 }
 
 func (c *Client) CreateSupportContact(ctx context.Context, contact models.SupportContact) error {
-	sql := `INSERT INTO support_contacts (contact_id, user_id, contact_email, nickname, notification_preference) VALUES ($1, $2, $3, $4, $5)`
+	// Inclui phone no INSERT
+	sql := `INSERT INTO support_contacts (contact_id, user_id, contact_email, phone, nickname, notification_preference)
+	        VALUES ($1, $2, $3, $4, $5, $6)`
 	if strings.TrimSpace(contact.ContactID) == "" {
 		contact.ContactID = uuid.New().String()
 	}
-	_, err := c.pool.Exec(ctx, sql, contact.ContactID, contact.UserID, contact.ContactEmail, contact.Nickname, contact.NotificationPreference)
+	_, err := c.pool.Exec(ctx, sql,
+		contact.ContactID,
+		contact.UserID,
+		strings.TrimSpace(contact.ContactEmail),
+		strings.TrimSpace(contact.Phone),
+		strings.TrimSpace(contact.Nickname),
+		strings.TrimSpace(contact.NotificationPreference),
+	)
 	return err
 }
 
 func (c *Client) GetSupportContactsByUserID(ctx context.Context, userID string) ([]models.SupportContact, error) {
-	sql := `SELECT contact_id, user_id, contact_email, nickname, notification_preference FROM support_contacts WHERE user_id = $1`
+	// Seleciona phone
+	sql := `SELECT contact_id, user_id, contact_email, phone, nickname, notification_preference FROM support_contacts WHERE user_id = $1`
 	rows, err := c.pool.Query(ctx, sql, userID)
 	if err != nil {
 		return nil, err
@@ -286,7 +304,14 @@ func (c *Client) GetSupportContactsByUserID(ctx context.Context, userID string) 
 	var contacts []models.SupportContact
 	for rows.Next() {
 		contact := models.SupportContact{}
-		if err := rows.Scan(&contact.ContactID, &contact.UserID, &contact.ContactEmail, &contact.Nickname, &contact.NotificationPreference); err != nil {
+		if err := rows.Scan(
+			&contact.ContactID,
+			&contact.UserID,
+			&contact.ContactEmail,
+			&contact.Phone,
+			&contact.Nickname,
+			&contact.NotificationPreference,
+		); err != nil {
 			return nil, err
 		}
 		contacts = append(contacts, contact)
@@ -311,7 +336,7 @@ func (c *Client) CreateHabit(ctx context.Context, habit models.Habit) (string, e
 		habit.ID = uuid.New().String()
 	}
 	sql := `INSERT INTO habits (id, user_id, name, goal_type, frequency) VALUES ($1, $2, $3, $4, $5)`
-	_, err := c.pool.Exec(ctx, sql, habit.ID, habit.UserID, habit.Name, habit.GoalType, habit.Frequency)
+	_, err := c.pool.Exec(ctx, sql, habit.ID, habit.UserID, strings.TrimSpace(habit.Name), strings.TrimSpace(habit.GoalType), strings.TrimSpace(habit.Frequency))
 	if err != nil {
 		return "", err
 	}
@@ -429,4 +454,17 @@ func (c *Client) GetTopManaUsers(ctx context.Context, limit int) ([]models.Leade
 		entries = append(entries, e)
 	}
 	return entries, nil
+}
+
+// Remove contato de suporte garantindo que pertence ao userID
+func (c *Client) DeleteSupportContactByUser(ctx context.Context, userID, contactID string) error {
+	const sql = `DELETE FROM support_contacts WHERE contact_id = $1 AND user_id = $2`
+	cmdTag, err := c.pool.Exec(ctx, sql, contactID, userID)
+	if err != nil {
+		return err
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return errors.New("contato não encontrado")
+	}
+	return nil
 }
