@@ -1,0 +1,55 @@
+<div class="habit-detail-container">
+  <div class="loading" *ngIf="isLoading">
+    <p>Carregando...</p>
+  </div>
+
+  <div *ngIf="!isLoading && habit">
+    <div class="detail-header">
+      <app-button variant="secondary" size="small" (clicked)="onBack()">
+        ← Voltar
+      </app-button>
+      <app-button variant="primary" size="small" (clicked)="onEdit()">
+        Editar Hábito
+      </app-button>
+    </div>
+
+    <app-card>
+      <div class="habit-info">
+        <h1>{{ habit.name }}</h1>
+        <span class="frequency-badge">{{ habit.frequency }}</span>
+        <p class="description">{{ habit.description }}</p>
+        
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value">{{ habit.streak }}</div>
+            <div class="stat-label">Dias de Sequência</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">{{ habit.completionCount }}</div>
+            <div class="stat-label">Total de Conclusões</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">{{ habit.completed ? 'Sim' : 'Não' }}</div>
+            <div class="stat-label">Concluído Hoje</div>
+          </div>
+        </div>
+      </div>
+    </app-card>
+
+    <app-card title="Histórico de Conclusões" class="history-card">
+      <div class="history-list" *ngIf="history.length > 0">
+        <div class="history-item" *ngFor="let item of history">
+          <div class="history-date">
+            {{ item.completedAt | date: 'dd/MM/yyyy HH:mm' }}
+          </div>
+          <div class="history-reward">
+            +{{ item.manaAwarded }} Mana
+          </div>
+        </div>
+      </div>
+      <div class="empty-state" *ngIf="history.length === 0">
+        <p>Nenhuma conclusão registrada ainda.</p>
+      </div>
+    </app-card>
+  </div>
+</div>

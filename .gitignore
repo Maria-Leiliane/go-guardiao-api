@@ -47,6 +47,14 @@ coverage.out
 # Node/npm (se usar frontend junto)
 node_modules/
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Angular build artifacts
+frontend/dist/
+frontend/.angular/
+frontend/out-tsc/
 
 # Others
 *.gz

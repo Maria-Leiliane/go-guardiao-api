@@ -1,0 +1,73 @@
+<div class="profile-container">
+  <h1>Meu Perfil</h1>
+
+  <div class="profile-content">
+    <app-card title="Informações Pessoais">
+      <div *ngIf="!isEditing" class="profile-info">
+        <div class="info-item">
+          <span class="label">Nome:</span>
+          <span class="value">{{ currentUser?.name }}</span>
+        </div>
+        <div class="info-item">
+          <span class="label">Email:</span>
+          <span class="value">{{ currentUser?.email }}</span>
+        </div>
+        <div class="info-item">
+          <span class="label">Nível:</span>
+          <span class="value">{{ currentUser?.level }}</span>
+        </div>
+        <div class="info-item">
+          <span class="label">Mana Total:</span>
+          <span class="value">{{ currentUser?.mana }}</span>
+        </div>
+        <app-button variant="primary" (clicked)="onEdit()">
+          Editar Perfil
+        </app-button>
+      </div>
+
+      <form *ngIf="isEditing" [formGroup]="profileForm" (ngSubmit)="onSave()" class="profile-form">
+        <div class="form-group">
+          <label for="name">Nome</label>
+          <input type="text" id="name" formControlName="name">
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" formControlName="email">
+        </div>
+
+        <div class="success-message" *ngIf="successMessage">
+          {{ successMessage }}
+        </div>
+
+        <div class="error-message" *ngIf="errorMessage">
+          {{ errorMessage }}
+        </div>
+
+        <div class="form-actions">
+          <app-button variant="secondary" (clicked)="onCancel()">
+            Cancelar
+          </app-button>
+          <app-button 
+            type="submit" 
+            variant="primary"
+            [disabled]="profileForm.invalid || isLoading">
+            {{ isLoading ? 'Salvando...' : 'Salvar' }}
+          </app-button>
+        </div>
+      </form>
+    </app-card>
+
+    <app-card title="Contatos de Suporte Oncológico" class="support-card">
+      <div class="support-list">
+        <div class="support-item" *ngFor="let contact of supportContacts">
+          <h4>{{ contact.name }}</h4>
+          <p class="phone">📞 {{ contact.phone }}</p>
+          <a [href]="contact.url" target="_blank" class="link">
+            Visitar Site →
+          </a>
+        </div>
+      </div>
+    </app-card>
+  </div>
+</div>

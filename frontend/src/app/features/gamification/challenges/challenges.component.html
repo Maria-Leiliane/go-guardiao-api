@@ -1,0 +1,67 @@
+<div class="challenges-container">
+  <div class="challenges-header">
+    <h1>Desafios</h1>
+    <div class="filter-buttons">
+      <app-button 
+        [variant]="filter === 'all' ? 'primary' : 'secondary'" 
+        size="small"
+        (clicked)="filter = 'all'">
+        Todos
+      </app-button>
+      <app-button 
+        [variant]="filter === 'active' ? 'primary' : 'secondary'" 
+        size="small"
+        (clicked)="filter = 'active'">
+        Ativos
+      </app-button>
+      <app-button 
+        [variant]="filter === 'completed' ? 'primary' : 'secondary'" 
+        size="small"
+        (clicked)="filter = 'completed'">
+        Completos
+      </app-button>
+    </div>
+  </div>
+
+  <div class="loading" *ngIf="isLoading">
+    <p>Carregando desafios...</p>
+  </div>
+
+  <div class="challenges-grid" *ngIf="!isLoading && filteredChallenges.length > 0">
+    <app-card *ngFor="let challenge of filteredChallenges" class="challenge-card">
+      <div class="challenge-content">
+        <div class="challenge-header">
+          <h3>{{ challenge.title }}</h3>
+          <span class="reward-badge">+{{ challenge.reward }} Mana</span>
+        </div>
+
+        <span class="status-badge" [ngClass]="getStatusClass(challenge.status)">
+          {{ getStatusLabel(challenge.status) }}
+        </span>
+
+        <p class="challenge-description">{{ challenge.description }}</p>
+
+        <div class="challenge-progress">
+          <div class="progress-info">
+            <span class="progress-label">Progresso</span>
+            <span class="progress-text">{{ challenge.progress }}/{{ challenge.targetProgress }}</span>
+          </div>
+          <div class="progress-bar">
+            <div 
+              class="progress-fill" 
+              [style.width.%]="getProgressPercentage(challenge)">
+            </div>
+          </div>
+        </div>
+
+        <div class="challenge-footer" *ngIf="challenge.expiresAt">
+          <span class="expires-label">Expira em: {{ challenge.expiresAt | date: 'dd/MM/yyyy' }}</span>
+        </div>
+      </div>
+    </app-card>
+  </div>
+
+  <div class="empty-state" *ngIf="!isLoading && filteredChallenges.length === 0">
+    <p>Nenhum desafio encontrado.</p>
+  </div>
+</div>

@@ -1,0 +1,48 @@
+<div class="habit-form-container">
+  <app-card [title]="isEditMode ? 'Editar Hábito' : 'Novo Hábito'">
+    <form [formGroup]="habitForm" (ngSubmit)="onSubmit()" class="habit-form">
+      <div class="form-group">
+        <label for="name">Nome do Hábito *</label>
+        <input 
+          type="text" 
+          id="name" 
+          formControlName="name"
+          placeholder="Ex: Beber 2 litros de água">
+      </div>
+
+      <div class="form-group">
+        <label for="description">Descrição *</label>
+        <textarea 
+          id="description" 
+          formControlName="description"
+          rows="4"
+          placeholder="Descreva seu hábito e por que ele é importante para você"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="frequency">Frequência *</label>
+        <select id="frequency" formControlName="frequency">
+          <option *ngFor="let freq of frequencies" [value]="freq.value">
+            {{ freq.label }}
+          </option>
+        </select>
+      </div>
+
+      <div class="error-message" *ngIf="errorMessage">
+        {{ errorMessage }}
+      </div>
+
+      <div class="form-actions">
+        <app-button variant="secondary" (clicked)="onCancel()">
+          Cancelar
+        </app-button>
+        <app-button 
+          type="submit" 
+          variant="primary"
+          [disabled]="habitForm.invalid || isLoading">
+          {{ isLoading ? 'Salvando...' : (isEditMode ? 'Atualizar' : 'Criar Hábito') }}
+        </app-button>
+      </div>
+    </form>
+  </app-card>
+</div>
