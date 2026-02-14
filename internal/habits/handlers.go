@@ -21,7 +21,8 @@ func NewService(dbClient *db.Client) *Service {
 	return &Service{DBClient: dbClient}
 }
 
-// Helpers para respostas padronizadas
+// --- Helpers para respostas padronizadas ---
+
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -31,6 +32,8 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
+
+// --- Handlers de API ---
 
 // HandleCreateHabit lida com a criação de um novo hábito.
 func (s *Service) HandleCreateHabit(w http.ResponseWriter, r *http.Request) {
@@ -63,73 +66,87 @@ func (s *Service) HandleCreateHabit(w http.ResponseWriter, r *http.Request) {
 func (s *Service) HandleGetHabits(w http.ResponseWriter, r *http.Request) {
 	userID, err := auth.GetUserIDFromContext(r)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "Acesso negado: UserID ausente.")
+		writeError(w, http.StatusUnauthorized, "Acesso negado.")
 		return
 	}
 
 	habits, err := s.DBClient.GetHabitsByUserID(r.Context(), userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Falha ao buscar hábitos: %v", err))
+		writeError(w, http.StatusInternalServerError, "Erro ao buscar hábitos.")
 		return
 	}
 
 	writeJSON(w, http.StatusOK, habits)
 }
 
-// HandleLogHabit lida com o registro de um progresso em um hábito.
+// HandleGetHabitById busca um único hábito (Necessário para o cache do Angular).
+func (s *Service) HandleGetHabitById(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	habitID := vars["habitId"]
+
+	habit, err := s.DBClient.GetHabitById(r.Context(), habitID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Hábito não encontrado.")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, habit)
+}
+
+// HandleLogHabit registra um progresso (Log) em um hábito.
 func (s *Service) HandleLogHabit(w http.ResponseWriter, r *http.Request) {
 	userID, err := auth.GetUserIDFromContext(r)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "Acesso negado: UserID ausente.")
+		writeError(w, http.StatusUnauthorized, "Acesso negado.")
 		return
 	}
 
 	vars := mux.Vars(r)
 	habitID := vars["habitId"]
-	if habitID == "" {
-		writeError(w, http.StatusBadRequest, "Parâmetro habitId ausente na rota.")
-		return
-	}
 
 	var logData models.HabitLog
-	if err := json.NewDecoder(r.Body).Decode(&logData); err != nil {
-		writeError(w, http.StatusBadRequest, "Requisição inválida.")
-		return
-	}
+	_ = json.NewDecoder(r.Body).Decode(&logData)
 
 	logData.UserID = userID
 	logData.HabitID = habitID
 
 	if err := s.DBClient.LogHabit(r.Context(), logData); err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Falha ao registrar log de hábito: %v", err))
+		writeError(w, http.StatusInternalServerError, "Erro ao registrar log.")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{
-		"message": "Log de hábito registrado com sucesso.",
-	})
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Log registrado."})
 }
 
-// HandleGetHabitLogs busca os logs de um hábito específico.
+// HandleGetHabitLogs busca o histórico de um hábito.
 func (s *Service) HandleGetHabitLogs(w http.ResponseWriter, r *http.Request) {
-	_, err := auth.GetUserIDFromContext(r)
+	vars := mux.Vars(r)
+	habitID := vars["habitId"]
+
+	logs, err := s.DBClient.GetHabitLogs(r.Context(), habitID)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "Acesso negado: UserID ausente.")
+		writeError(w, http.StatusInternalServerError, "Erro ao buscar histórico.")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, logs)
+}
+
+// HandleDeleteHabit remove o hábito com segurança.
+func (s *Service) HandleDeleteHabit(w http.ResponseWriter, r *http.Request) {
+	userID, err := auth.GetUserIDFromContext(r)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "Acesso negado.")
 		return
 	}
 
 	vars := mux.Vars(r)
 	habitID := vars["habitId"]
-	if habitID == "" {
-		writeError(w, http.StatusBadRequest, "Parâmetro habitId ausente na rota.")
+
+	if err := s.DBClient.DeleteHabit(r.Context(), habitID, userID); err != nil {
+		writeError(w, http.StatusForbidden, err.Error())
 		return
 	}
 
-	logs, err := s.DBClient.GetHabitLogs(r.Context(), habitID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Falha ao buscar logs do hábito: %v", err))
-		return
-	}
-
-	writeJSON(w, http.StatusOK, logs)
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Hábito excluído."})
 }

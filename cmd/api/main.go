@@ -80,6 +80,7 @@ func defineServiceRoutes(router *mux.Router, dbClient *db.Client, cacheClient *c
 	router.HandleFunc("/habits", habitService.HandleGetHabits).Methods("GET")
 	router.HandleFunc("/habits/{habitId}/log", habitService.HandleLogHabit).Methods("POST")
 	router.HandleFunc("/habits/{habitId}/logs", habitService.HandleGetHabitLogs).Methods("GET")
+	router.HandleFunc("/habits/{habitId}", habitService.HandleDeleteHabit).Methods("DELETE")
 
 	// --- GAMIFICAÇÃO ---
 	router.HandleFunc("/mana/balance", gamificationService.HandleGetManaBalance).Methods("GET")
