@@ -60,7 +60,7 @@ func (c *Client) Close() {
 	}
 }
 
-// ensureColumn adiciona uma coluna se ela não existir
+// ensureColumn adiciona uma coluna se ela não existir (compatível com Neon/Postgres)
 func ensureColumn(ctx context.Context, tx pgx.Tx, table, column, definition string) error {
 	var exists bool
 	const q = `
@@ -105,14 +105,16 @@ func (c *Client) InitSchema(ctx context.Context) error {
        );`); err != nil {
 		return fmt.Errorf("falha ao criar tabela users: %w", err)
 	}
+	// Coluna de senha (bcrypt ~60 chars; usamos VARCHAR(72))
 	if err = ensureColumn(ctx, tx, "users", "password_hash", "VARCHAR(72)"); err != nil {
 		return err
 	}
+	// Índice único (idempotente)
 	if _, err = tx.Exec(ctx, `CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique_idx ON users (email);`); err != nil {
 		return fmt.Errorf("falha ao criar índice de email: %w", err)
 	}
 
-	// Tabelas de Gamificação
+	// Demais tabelas
 	if _, err = tx.Exec(ctx, `
        CREATE TABLE IF NOT EXISTS user_mana (
           user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -133,7 +135,7 @@ func (c *Client) InitSchema(ctx context.Context) error {
 		return fmt.Errorf("falha ao criar tabela mana_transactions: %w", err)
 	}
 
-	// Contatos de Suporte
+	// Tabela support_contacts
 	if _, err = tx.Exec(ctx, `
        CREATE TABLE IF NOT EXISTS support_contacts (
           contact_id UUID PRIMARY KEY,
@@ -145,11 +147,11 @@ func (c *Client) InitSchema(ctx context.Context) error {
        );`); err != nil {
 		return fmt.Errorf("falha ao criar tabela support_contacts: %w", err)
 	}
+	// garante coluna phone (idempotente)
 	if err = ensureColumn(ctx, tx, "support_contacts", "phone", "VARCHAR(30)"); err != nil {
 		return err
 	}
 
-	// Hábitos e Logs
 	if _, err = tx.Exec(ctx, `
        CREATE TABLE IF NOT EXISTS habits (
           id UUID PRIMARY KEY,
@@ -174,8 +176,6 @@ func (c *Client) InitSchema(ctx context.Context) error {
 
 	return tx.Commit(ctx)
 }
-
-// --- Operações de Usuário ---
 
 func (c *Client) CreateUser(ctx context.Context, user models.User) error {
 	tx, err := c.pool.Begin(ctx)
@@ -221,6 +221,16 @@ func (c *Client) GetUserByEmail(ctx context.Context, email string) (models.User,
 	return u, nil
 }
 
+func (c *Client) GetUserPasswordHash(ctx context.Context, userID string) (string, error) {
+	var hash string
+	const q = `SELECT password_hash FROM users WHERE id = $1`
+	err := c.pool.QueryRow(ctx, q, userID).Scan(&hash)
+	if err != nil {
+		return "", err
+	}
+	return hash, nil
+}
+
 func (c *Client) SetUserPassword(ctx context.Context, userID, hash string) error {
 	const q = `UPDATE users SET password_hash = $2 WHERE id = $1`
 	cmdTag, err := c.pool.Exec(ctx, q, userID, hash)
@@ -228,7 +238,7 @@ func (c *Client) SetUserPassword(ctx context.Context, userID, hash string) error
 		return fmt.Errorf("falha ao atualizar senha: %w", err)
 	}
 	if cmdTag.RowsAffected() == 0 {
-		return errors.New("usuário não encontrado")
+		return errors.New("usuário não encontrado para atualização de senha")
 	}
 	return nil
 }
@@ -245,7 +255,17 @@ func (c *Client) UpdateUser(ctx context.Context, user models.User) error {
 	return nil
 }
 
-// --- Operações de Contatos ---
+func (c *Client) UpdateUserEmail(ctx context.Context, userID, email string) error {
+	const q = `UPDATE users SET email = $2 WHERE id = $1`
+	cmdTag, err := c.pool.Exec(ctx, q, userID, strings.ToLower(strings.TrimSpace(email)))
+	if err != nil {
+		return fmt.Errorf("falha ao atualizar e-mail: %w", err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
 
 func (c *Client) CreateSupportContact(ctx context.Context, contact models.SupportContact) error {
 	sql := `INSERT INTO support_contacts (contact_id, user_id, contact_email, phone, nickname, notification_preference)
@@ -275,7 +295,14 @@ func (c *Client) GetSupportContactsByUserID(ctx context.Context, userID string) 
 	var contacts []models.SupportContact
 	for rows.Next() {
 		contact := models.SupportContact{}
-		if err := rows.Scan(&contact.ContactID, &contact.UserID, &contact.ContactEmail, &contact.Phone, &contact.Nickname, &contact.NotificationPreference); err != nil {
+		if err := rows.Scan(
+			&contact.ContactID,
+			&contact.UserID,
+			&contact.ContactEmail,
+			&contact.Phone,
+			&contact.Nickname,
+			&contact.NotificationPreference,
+		); err != nil {
 			return nil, err
 		}
 		contacts = append(contacts, contact)
@@ -283,9 +310,9 @@ func (c *Client) GetSupportContactsByUserID(ctx context.Context, userID string) 
 	return contacts, nil
 }
 
-func (c *Client) DeleteSupportContactByUser(ctx context.Context, userID, contactID string) error {
-	const sql = `DELETE FROM support_contacts WHERE contact_id = $1 AND user_id = $2`
-	cmdTag, err := c.pool.Exec(ctx, sql, contactID, userID)
+func (c *Client) DeleteSupportContact(ctx context.Context, contactID string) error {
+	sql := `DELETE FROM support_contacts WHERE contact_id = $1`
+	cmdTag, err := c.pool.Exec(ctx, sql, contactID)
 	if err != nil {
 		return err
 	}
@@ -294,8 +321,6 @@ func (c *Client) DeleteSupportContactByUser(ctx context.Context, userID, contact
 	}
 	return nil
 }
-
-// --- Operações de Hábitos ---
 
 func (c *Client) CreateHabit(ctx context.Context, habit models.Habit) (string, error) {
 	if strings.TrimSpace(habit.ID) == "" {
@@ -328,23 +353,13 @@ func (c *Client) GetHabitsByUserID(ctx context.Context, userID string) ([]models
 	return habits, nil
 }
 
-func (c *Client) GetHabitById(ctx context.Context, habitID string) (models.Habit, error) {
-	habit := models.Habit{}
-	sql := `SELECT id, user_id, name, goal_type, frequency, created_at FROM habits WHERE id = $1`
-	err := c.pool.QueryRow(ctx, sql, habitID).Scan(&habit.ID, &habit.UserID, &habit.Name, &habit.GoalType, &habit.Frequency, &habit.CreatedAt)
-	if err != nil {
-		return models.Habit{}, err
-	}
-	return habit, nil
-}
-
 func (c *Client) LogHabit(ctx context.Context, logData models.HabitLog) error {
 	sql := `INSERT INTO habit_logs (habit_id, user_id, value) VALUES ($1, $2, $3)`
 	_, err := c.pool.Exec(ctx, sql, logData.HabitID, logData.UserID, logData.Value)
 	if err != nil {
 		return err
 	}
-	log.Printf("DB: Log registrado para o hábito %s", logData.HabitID)
+	log.Printf("DB Ação: Log de hábito %s registrado.", logData.HabitID)
 	return nil
 }
 
@@ -367,20 +382,6 @@ func (c *Client) GetHabitLogs(ctx context.Context, habitID string) ([]models.Hab
 	return logs, nil
 }
 
-func (c *Client) DeleteHabit(ctx context.Context, habitID string, userID string) error {
-	const sql = `DELETE FROM habits WHERE id = $1 AND user_id = $2`
-	cmdTag, err := c.pool.Exec(ctx, sql, habitID, userID)
-	if err != nil {
-		return fmt.Errorf("falha ao deletar hábito: %w", err)
-	}
-	if cmdTag.RowsAffected() == 0 {
-		return errors.New("hábito não encontrado ou permissão negada")
-	}
-	return nil
-}
-
-// --- Operações de Mana e Gamificação ---
-
 func (c *Client) GetManaBalance(ctx context.Context, userID string) (int, error) {
 	var balance int
 	sql := `SELECT balance FROM user_mana WHERE user_id = $1`
@@ -397,26 +398,23 @@ func (c *Client) GetManaBalance(ctx context.Context, userID string) (int, error)
 func (c *Client) UpdateManaBalance(ctx context.Context, txData models.ManaTransaction) error {
 	tx, err := c.pool.Begin(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("falha ao iniciar transação de mana: %w", err)
 	}
 	defer func() {
 		if err != nil {
 			_ = tx.Rollback(ctx)
 		}
 	}()
-
-	var newBalance int
 	updateSQL := `UPDATE user_mana SET balance = balance + $1, updated_at = NOW() WHERE user_id = $2 RETURNING balance`
+	var newBalance int
 	err = tx.QueryRow(ctx, updateSQL, txData.Amount, txData.UserID).Scan(&newBalance)
 	if err != nil {
-		return err
+		return fmt.Errorf("falha ao atualizar saldo: %w", err)
 	}
-
 	insertSQL := `INSERT INTO mana_transactions (user_id, type, amount, reference_id) VALUES ($1, $2, $3, $4)`
 	if _, err := tx.Exec(ctx, insertSQL, txData.UserID, txData.Type, txData.Amount, txData.ReferenceID); err != nil {
-		return err
+		return fmt.Errorf("falha ao registrar transação de mana: %w", err)
 	}
-
 	return tx.Commit(ctx)
 }
 
@@ -447,4 +445,39 @@ func (c *Client) GetTopManaUsers(ctx context.Context, limit int) ([]models.Leade
 		entries = append(entries, e)
 	}
 	return entries, nil
+}
+
+// Remove contato de suporte garantindo que pertence ao userID
+func (c *Client) DeleteSupportContactByUser(ctx context.Context, userID, contactID string) error {
+	const sql = `DELETE FROM support_contacts WHERE contact_id = $1 AND user_id = $2`
+	cmdTag, err := c.pool.Exec(ctx, sql, contactID, userID)
+	if err != nil {
+		return err
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return errors.New("contato não encontrado")
+	}
+	return nil
+}
+
+func (c *Client) DeleteHabit(ctx context.Context, habitID string, userID string) error {
+	const sql = `DELETE FROM habits WHERE id = $1 AND user_id = $2`
+	cmdTag, err := c.pool.Exec(ctx, sql, habitID, userID)
+	if err != nil {
+		return fmt.Errorf("falha ao deletar hábito: %w", err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return errors.New("hábito não encontrado ou permissão negada")
+	}
+	return nil
+}
+
+func (c *Client) GetHabitById(ctx context.Context, habitID string) (models.Habit, error) {
+	habit := models.Habit{}
+	sql := `SELECT id, user_id, name, goal_type, frequency, created_at FROM habits WHERE id = $1`
+	err := c.pool.QueryRow(ctx, sql, habitID).Scan(&habit.ID, &habit.UserID, &habit.Name, &habit.GoalType, &habit.Frequency, &habit.CreatedAt)
+	if err != nil {
+		return models.Habit{}, err
+	}
+	return habit, nil
 }
